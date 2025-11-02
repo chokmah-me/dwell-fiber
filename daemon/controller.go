@@ -1,184 +1,203 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"math"
 	"sync"
 	"time"
-
-	"github.com/dyb5784/dwell-fiber/pkg/bpf"
+	
+	"github.com/dyb5784/dwell-fiber/pkg/enforcement"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Controller struct {
-	mu         sync.RWMutex
-	Alpha      float64
-	Budget     float64
-	Price      float64
-	Dwell      float64
-	UpdatedAt  time.Time
-	Iteration  int
-	Scenario   string
-	UseRealBPF bool
+	Alpha  float64 // Exported for metrics
+	Budget float64 // Exported for metrics
+	mu     sync.RWMutex
+	
+	// State
+	currentPrice float64
+	lastUpdate   time.Time
+	scenario     string
+	
+	// Real BPF tracking
+	dwellMap map[int]*DwellInfo // PID -> dwell info
+	
+	// Recent dwell times for averaging
+	recentDwells []float64
+	maxRecent    int
+	
+	// Enforcement
+	enforcer *enforcement.Enforcer
+	
+	// Metrics
+	dwellGauge      prometheus.Gauge
+	priceGauge      prometheus.Gauge
+	throttledGauge  prometheus.Gauge
+	killedGauge     prometheus.Gauge
+	enforcementMode prometheus.Gauge
+}
 
-	// BPF integration
-	bpfManager *bpf.BPFManager
-	dwellMap   map[uint32]float64 // PID -> accumulated dwell time (seconds)
+type DwellInfo struct {
+	PID       int
+	Cmd       string
+	OpenTime  time.Time
+	CloseTime time.Time
+	Dwell     time.Duration
 }
 
 func NewController(alpha, budget float64) *Controller {
-	return &Controller{
-		Alpha:      alpha,
-		Budget:     budget,
-		Price:      0.0,
-		Dwell:      0.0,
-		UpdatedAt:  time.Now(),
-		Scenario:   "initializing",
-		UseRealBPF: true, // Try real BPF first
-		dwellMap:   make(map[uint32]float64),
+	// Create enforcement config
+	enfConfig := enforcement.DefaultConfig()
+	enfConfig.Enabled = true // Start in dry-run
+	enfConfig.ThrottleThreshold = 5 * time.Second
+	enfConfig.ThrottleCPUQuota = 20
+	enfConfig.KillThreshold = 15 * time.Second
+	enfConfig.KillEnabled = false
+	
+	c := &Controller{
+		Alpha:        alpha,
+		Budget:       budget,
+		currentPrice: 0.1,
+		lastUpdate:   time.Now(),
+		scenario:     "real-bpf",
+		dwellMap:     make(map[int]*DwellInfo),
+		recentDwells: make([]float64, 0),
+		maxRecent:    100, // Keep last 100 measurements
+		enforcer:     enforcement.NewEnforcer(enfConfig),
+		dwellGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_dwell_time",
+			Help: "Current average file dwell time (seconds)",
+		}),
+		priceGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_price",
+			Help: "Current access price",
+		}),
+		throttledGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_throttled_count",
+			Help: "Number of currently throttled processes",
+		}),
+		killedGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_killed_count",
+			Help: "Number of killed processes",
+		}),
+		enforcementMode: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_enforcement_enabled",
+			Help: "Enforcement mode (0=dry-run, 1=enabled)",
+		}),
+	}
+	
+	prometheus.MustRegister(c.dwellGauge)
+	prometheus.MustRegister(c.priceGauge)
+	prometheus.MustRegister(c.throttledGauge)
+	prometheus.MustRegister(c.killedGauge)
+	prometheus.MustRegister(c.enforcementMode)
+	
+	return c
+}
+
+func (c *Controller) HandleOpenEvent(pid int, cmd string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	c.dwellMap[pid] = &DwellInfo{
+		PID:      pid,
+		Cmd:      cmd,
+		OpenTime: time.Now(),
 	}
 }
 
-func (c *Controller) LoadBPF() error {
-	log.Println("Attempting to load BPF program...")
-
-	// Try to load real BPF
-	bm, err := bpf.LoadBPF("bpf/dwell_monitor.bpf.o")
-	if err != nil {
-		log.Printf("⚠️  Failed to load BPF: %v", err)
-		log.Println("Falling back to simulation mode")
-		c.UseRealBPF = false
-		c.Scenario = "simulation"
-		return nil // Not a fatal error, fall back to simulation
+func (c *Controller) HandleCloseEvent(pid int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	info, exists := c.dwellMap[pid]
+	if !exists {
+		return
 	}
-
-	// Attach to tracepoints
-	if err := bm.AttachTracepoints(); err != nil {
-		log.Printf("⚠️  Failed to attach tracepoints: %v", err)
-		bm.Close()
-		c.UseRealBPF = false
-		c.Scenario = "simulation"
-		return nil
+	
+	info.CloseTime = time.Now()
+	info.Dwell = info.CloseTime.Sub(info.OpenTime)
+	
+	// Store dwell time for averaging
+	dwellSeconds := info.Dwell.Seconds()
+	c.recentDwells = append(c.recentDwells, dwellSeconds)
+	
+	// Keep only recent measurements
+	if len(c.recentDwells) > c.maxRecent {
+		c.recentDwells = c.recentDwells[1:]
 	}
-
-	// Start reader
-	if err := bm.StartReader(); err != nil {
-		log.Printf("⚠️  Failed to start reader: %v", err)
-		bm.Close()
-		c.UseRealBPF = false
-		c.Scenario = "simulation"
-		return nil
-	}
-
-	c.bpfManager = bm
-	c.Scenario = "real-bpf"
-
-	// Start processing events
-	go c.processEvents(bm.Events)
-
-	log.Println("✓ BPF integration active")
-	return nil
-}
-
-func (c *Controller) processEvents(events <-chan bpf.DwellEvent) {
-	for event := range events {
-		c.mu.Lock()
-
-		// Convert nanoseconds to seconds
-		dwellSec := float64(event.DurationNs) / 1e9
-
-		// Accumulate dwell time per PID
-		c.dwellMap[event.PID] += dwellSec
-
-		// Log interesting events (> 1 second)
-		if dwellSec > 1.0 {
-			comm := bpf.GetString(event.Comm[:])
-			log.Printf("High dwell: PID=%d (%s) dwell=%.2fs", event.PID, comm, dwellSec)
+	
+	// Apply enforcement for significant dwell
+	if info.Dwell > time.Second {
+		if err := c.enforcer.Enforce(info.PID, info.Cmd, info.Dwell); err != nil {
+			fmt.Printf("⚠️  Enforcement error: %v\n", err)
 		}
+	}
+	
+	// Update metrics
+	avgDwell := c.calculateAverageDwell()
+	c.dwellGauge.Set(avgDwell)
+	
+	// Update price using ADMM
+	c.updatePrice(avgDwell)
+	c.priceGauge.Set(c.currentPrice)
+	c.lastUpdate = time.Now()
+	
+	// Update enforcement metrics
+	throttled, killed := c.enforcer.GetStats()
+	c.throttledGauge.Set(float64(throttled))
+	c.killedGauge.Set(float64(killed))
+	c.enforcementMode.Set(0.0) // Dry-run mode
+	
+	// Cleanup old entries
+	delete(c.dwellMap, pid)
+}
 
+func (c *Controller) calculateAverageDwell() float64 {
+	if len(c.recentDwells) == 0 {
+		return 0
+	}
+	
+	var total float64
+	for _, dwell := range c.recentDwells {
+		total += dwell
+	}
+	
+	return total / float64(len(c.recentDwells))
+}
+
+func (c *Controller) updatePrice(avgDwell float64) {
+	// ADMM price update: p(t+1) = p(t) + α(d(t) - budget)
+	violation := avgDwell - c.Budget
+	c.currentPrice = math.Max(0, c.currentPrice+c.Alpha*violation)
+}
+
+func (c *Controller) RunCleanup() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		c.mu.Lock()
+		
+		// Cleanup enforcement tracking
+		c.enforcer.Cleanup()
+		
+		// Cleanup old dwell entries
+		cutoff := time.Now().Add(-1 * time.Minute)
+		for pid, info := range c.dwellMap {
+			if info.OpenTime.Before(cutoff) && info.CloseTime.IsZero() {
+				delete(c.dwellMap, pid)
+			}
+		}
+		
 		c.mu.Unlock()
 	}
 }
 
-func (c *Controller) Update() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.UseRealBPF {
-		// Use real data from BPF
-		c.updateFromBPF()
-	} else {
-		// Use simulation
-		c.updateSimulation()
-	}
-
-	// ADMM price update: price = max(0, price + α*(dwell - budget))
-	violation := c.Dwell - c.Budget
-	newPrice := c.Price + c.Alpha*violation
-
-	if newPrice < 0 {
-		newPrice = 0
-	}
-
-	c.Price = newPrice
-	c.UpdatedAt = time.Now()
-	c.Iteration++
-}
-
-func (c *Controller) updateFromBPF() {
-	// Calculate system-wide average dwell time
-	if len(c.dwellMap) == 0 {
-		c.Dwell = 0
-		return
-	}
-
-	totalDwell := 0.0
-	for _, dwell := range c.dwellMap {
-		totalDwell += dwell
-	}
-
-	c.Dwell = totalDwell / float64(len(c.dwellMap))
-
-	// Reset dwell map periodically (every 10 iterations)
-	if c.Iteration%10 == 0 {
-		c.dwellMap = make(map[uint32]float64)
-	}
-}
-
-func (c *Controller) updateSimulation() {
-	// Original simulation code
-	t := float64(c.Iteration)
-	cycle := (c.Iteration / 100) % 4
-
-	switch cycle {
-	case 0:
-		c.Dwell = c.Budget + 2.0*math.Sin(t/10.0)
-		c.Scenario = "simulation:normal"
-	case 1:
-		c.Dwell = c.Budget + 3.0 + 0.5*math.Sin(t/5.0)
-		c.Scenario = "simulation:attack"
-	case 2:
-		progress := float64(c.Iteration%100) / 100.0
-		c.Dwell = c.Budget + 3.0*(1.0-progress)
-		c.Scenario = "simulation:recovery"
-	case 3:
-		c.Dwell = 1.5 + 0.5*math.Sin(t/15.0)
-		c.Scenario = "simulation:idle"
-	}
-
-	if c.Dwell < 0 {
-		c.Dwell = 0
-	}
-}
-
-func (c *Controller) GetState() (float64, float64, time.Time, string) {
+// GetState returns state for metrics (4 values for compatibility)
+func (c *Controller) GetState() (price float64, dwell float64, updated time.Time, scenario string) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.Price, c.Dwell, c.UpdatedAt, c.Scenario
-}
-
-func (c *Controller) Close() error {
-	if c.bpfManager != nil {
-		return c.bpfManager.Close()
-	}
-	return nil
+	return c.currentPrice, c.calculateAverageDwell(), c.lastUpdate, c.scenario
 }
