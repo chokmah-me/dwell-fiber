@@ -81,7 +81,7 @@ func main() {
 }
 
 // runSimulationLoop continuously generates synthetic dwell events
-// This simulates file access patterns for testing
+// This simulates file access patterns for testing with better price movement
 func runSimulationLoop(controller *Controller) {
 	log.Println("🔄 Simulation loop started - generating synthetic events")
 
@@ -91,24 +91,25 @@ func runSimulationLoop(controller *Controller) {
 	simulationIndex := 0
 
 	for range ticker.C {
-		// Generate synthetic dwell time (Normal distribution around budget)
-		// Mix of: Idle (1s), Normal (5s), High (7s), Critical (9s)
+		// Generate synthetic dwell time with better balance for price to oscillate
+		// 30 second cycle: 8 idle, 8 normal, 7 high, 7 critical
 		simulationIndex++
-		cycle := simulationIndex % 20 // 20 second cycle
+		cycle := simulationIndex % 30 // 30 second cycle for better balance
 
 		var dwell time.Duration
 		switch {
-		case cycle < 4:
-			// Idle phase (1-2 seconds) - 20% of time
-			dwell = time.Duration(1000+int64(cycle*250)) * time.Millisecond
 		case cycle < 8:
-			// Normal phase (5-6 seconds) - 20% of time
-			dwell = time.Duration(5000+int64((cycle-4)*250)) * time.Millisecond
-		case cycle < 14:
-			// High dwell phase (7 seconds) - 30% of time
+			// Idle phase (1-2 seconds) - 27% of time - ALLOWS PRICE TO DROP
+			dwell = time.Duration(1000+int64(cycle*125)) * time.Millisecond
+		case cycle < 16:
+			// Normal phase (4.5-5.5 seconds) - 27% of time - NEAR BUDGET
+			phase := cycle - 8
+			dwell = time.Duration(4500+int64(phase*125)) * time.Millisecond
+		case cycle < 23:
+			// High dwell phase (7 seconds) - 23% of time - ABOVE BUDGET
 			dwell = time.Duration(7000) * time.Millisecond
 		default:
-			// Critical phase (9 seconds, ransomware-like) - 30% of time
+			// Critical phase (9 seconds, ransomware-like) - 23% of time - WELL ABOVE
 			dwell = time.Duration(9000) * time.Millisecond
 		}
 

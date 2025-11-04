@@ -9,7 +9,7 @@ import (
 func StartMetricsServer(port int, ctrl *Controller) {
 	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		price, dwell, updated, scenario := ctrl.GetState()
-		
+
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Fprintf(w, "# Dwell-Fiber Metrics\n")
 		fmt.Fprintf(w, "dwell_fiber_price %.6f\n", price)
@@ -28,23 +28,24 @@ func StartMetricsServer(port int, ctrl *Controller) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		price, dwell, _, scenario := ctrl.GetState()
 		violation := dwell - ctrl.Budget
-		
+
 		// Determine status
-		status := "🟢 Normal"
+		status := "NORMAL"
 		statusColor := "green"
 		if dwell > ctrl.Budget+1 {
-			status = "🔴 High Dwell"
+			status = "HIGH DWELL"
 			statusColor = "red"
 		} else if dwell > ctrl.Budget {
-			status = "🟡 Warning"
+			status = "WARNING"
 			statusColor = "orange"
 		}
-		
-		w.Header().Set("Content-Type", "text/html")
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
 <head>
     <title>Dwell-Fiber Status</title>
+    <meta charset="utf-8">
     <meta http-equiv="refresh" content="1">
     <style>
         body { font-family: monospace; background: #1e1e1e; color: #d4d4d4; padding: 20px; }
@@ -52,14 +53,14 @@ func StartMetricsServer(port int, ctrl *Controller) {
         .metric { margin: 15px 0; padding: 10px; background: #2d2d2d; border-radius: 5px; }
         .label { color: #9cdcfe; font-weight: bold; }
         .value { color: #ce9178; font-size: 1.2em; }
-        .status { padding: 5px 10px; border-radius: 3px; display: inline-block; }
+        .status { padding: 5px 10px; border-radius: 3px; display: inline-block; font-weight: bold; }
         .chart { margin: 20px 0; }
         .bar { height: 20px; background: #4ec9b0; display: inline-block; }
         .budget-line { border-left: 2px solid red; height: 30px; display: inline-block; margin-left: -2px; }
     </style>
 </head>
 <body>
-    <h1>🛡️ Dwell-Fiber Real-Time Status</h1>
+    <h1>[SHIELD] Dwell-Fiber Real-Time Status</h1>
     
     <div class="metric">
         <span class="label">Status:</span>
@@ -80,7 +81,7 @@ func StartMetricsServer(port int, ctrl *Controller) {
     <div class="chart">
         <div style="width: %.1fpx;" class="bar"></div>
         <div class="budget-line"></div>
-        <span style="color: #666;"> ← Budget (5s)</span>
+        <span style="color: #666;"> &lt;-- Budget (5s)</span>
     </div>
     
     <div class="metric">
@@ -95,8 +96,8 @@ func StartMetricsServer(port int, ctrl *Controller) {
     </div>
     
     <div class="metric">
-        <span class="label">Price Formula:</span>
-        <code style="color: #dcdcaa;">price = max(0, %.6f + %.2f × %.4f)</code>
+        <span class="label">Price Formula (ADMM):</span>
+        <code style="color: #dcdcaa;">p(t+1) = max(0, %.6f + %.2f * %.4f)</code>
     </div>
     
     <hr style="border-color: #444;">
@@ -113,7 +114,7 @@ func StartMetricsServer(port int, ctrl *Controller) {
         <p><a href="/metrics" style="color: #4ec9b0;">Prometheus Metrics</a> | <a href="/health" style="color: #4ec9b0;">Health Check</a></p>
     </div>
 </body>
-</html>`, 
+</html>`,
 			statusColor, status,
 			scenario,
 			dwell, ctrl.Budget,
@@ -132,7 +133,7 @@ func StartMetricsServer(port int, ctrl *Controller) {
 
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("✓ Metrics server listening on %s", addr)
-	
+
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Printf("Metrics server error: %v", err)
 	}
