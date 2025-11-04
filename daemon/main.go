@@ -16,15 +16,42 @@ func main() {
 	budget := flag.Float64("budget", 5.0, "Target dwell time budget (seconds)")
 	simulate := flag.Bool("simulate", false, "Run in simulation mode")
 	port := flag.Int("port", 9090, "Metrics server port")
+	testEnforcement := flag.Bool("test-enforcement", false, "Run enforcement test suite")
+	enableEnforcement := flag.Bool("enable-enforcement", false, "Enable actual enforcement (not dry-run)")
+	enableKilling := flag.Bool("enable-killing", false, "Enable process killing (very dangerous!)")
 	flag.Parse()
 
-	fmt.Println("🛡️  Dwell-Fiber Daemon Starting")
+	fmt.Println("[SHIELD] Dwell-Fiber Daemon Starting")
 	fmt.Printf("   Alpha: %.2f\n", *alpha)
 	fmt.Printf("   Budget: %.2f seconds\n", *budget)
 	fmt.Printf("   Metrics: http://localhost:%d\n", *port)
+	fmt.Printf("   Mode: ")
+	if *testEnforcement {
+		fmt.Println("ENFORCEMENT TESTING")
+	} else if *simulate {
+		fmt.Println("SIMULATION")
+	} else {
+		fmt.Println("REAL BPF MONITORING")
+	}
 
 	// Create controller
 	controller := NewController(*alpha, *budget)
+
+	// Configure enforcement if requested
+	if *enableEnforcement {
+		controller.enforcer.SetEnabled(true)
+		fmt.Println("⚠️  Enforcement ENABLED (may throttle processes)")
+	}
+	if *enableKilling {
+		controller.enforcer.SetKillEnabled(true)
+		fmt.Println("⚠️⚠️  Process KILLING ENABLED (dangerous!)")
+	}
+
+	// Run enforcement tests if requested
+	if *testEnforcement {
+		runEnforcementTests(controller)
+		return
+	}
 
 	// Start cleanup routine
 	go controller.RunCleanup()
@@ -119,4 +146,25 @@ func runSimulationLoop(controller *Controller) {
 
 		controller.HandleCloseEvent(pid, cmd, dwell)
 	}
+}
+
+// runEnforcementTests runs the enforcement test suite
+func runEnforcementTests(controller *Controller) {
+	separator := "="
+	for i := 0; i < 70; i++ {
+		separator += "="
+	}
+
+	fmt.Println("\n" + separator)
+	fmt.Println("ENFORCEMENT TEST SUITE")
+	fmt.Println(separator)
+
+	// Print configuration
+	PrintEnforcementConfig(controller)
+
+	// Create and run test suite
+	test := NewEnforcementTest(controller)
+	test.RunAllScenarios()
+
+	fmt.Println("✓ Enforcement testing complete")
 }
