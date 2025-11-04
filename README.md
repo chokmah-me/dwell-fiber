@@ -6,13 +6,21 @@
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 8.18+](https://img.shields.io/badge/Coq-8.18%2B-blue.svg)](https://coq.inria.fr/)
 
+## 📖 Documentation
+
+**New to Dwell-Fiber?** Start with the **[User Guide](USER_GUIDE.md)** — a plain-English explanation for non-technical users covering setup, dashboard interpretation, and real-world usage.
+
+**Looking for technical details?** See sections below or the [architecture docs](docs/architecture.md).
+
+---
+
 ## Overview
 
-Dwell-fiber is a formally-verified eBPF-based system that prevents ransomware by enforcing file access budgets through economic pricing mechanisms. The system includes mathematical proofs of stability written in Coq.
+Dwell-Fiber is a formally-verified eBPF-based system that prevents ransomware by enforcing file access budgets through economic pricing mechanisms. The system includes mathematical proofs of stability written in Coq.
 
 ### Key Innovation
 
-Traditional ransomware detection relies on behavioral signatures that can be evaded. Dwell-fiber takes a different approach:
+Traditional ransomware detection relies on behavioral signatures that can be evaded. Dwell-Fiber takes a different approach:
 
 1. **Monitor** file "dwell time" (how long processes keep files open)
 2. **Price** file access using ADMM optimization (proven stable)
@@ -26,6 +34,16 @@ Traditional ransomware detection relies on behavioral signatures that can be eva
 - ✅ **Formally Verified**: Coq proofs guarantee system stability
 - 🚀 **Low Overhead**: Sub-millisecond latency impact
 - 📈 **Observable**: Built-in Prometheus metrics and web UI
+- 👥 **User-Friendly**: Safe-by-default (observation mode), no enforcement until explicitly enabled
+
+## Quick Links
+
+| Audience | Resource |
+|----------|----------|
+| **End Users** | [User Guide](USER_GUIDE.md) — 5-minute setup, no jargon |
+| **Developers** | [Architecture Docs](docs/architecture.md) — system design |
+| **Researchers** | [Stability Proofs](coq/dwell_stable.v) — formal verification |
+| **DevOps** | [Deployment Guide](docs/making-of.md) — systemd setup, monitoring |
 
 ## Architecture
 
@@ -73,7 +91,7 @@ The system is **proven** to satisfy (see `coq/dwell_stable.v`):
 ✅ **Stability**: No oscillations or divergence  
 ✅ **Parameter Range**: Works for any step size 0 < α < 2
 
-## Quick Start
+## Quick Start (5 Minutes)
 
 ### Prerequisites (Ubuntu 25.10)
 
@@ -100,10 +118,10 @@ make all
 make verify
 ```
 
-### Run
+### Run (Observation Mode — Safe Default)
 
 ```bash
-# Start daemon (requires root for BPF)
+# Start daemon in observation-only mode (no enforcement)
 sudo ./bin/dwell-fiber-daemon --alpha=0.5 --budget=5.0
 
 # In another terminal, check status
@@ -113,6 +131,13 @@ curl http://localhost:9090/metrics
 # Or open web UI
 firefox http://localhost:9090
 ```
+
+**See [USER_GUIDE.md](USER_GUIDE.md) for:**
+- Dashboard interpretation
+- Command-line options
+- Real-world usage scenarios
+- Troubleshooting
+
 ## Repository Structure
 
 ```
@@ -130,6 +155,7 @@ dwell-fiber/
 ├── pkg/                     # Reusable packages
 ├── scripts/                 # Helper scripts
 ├── docs/                    # Documentation
+├── USER_GUIDE.md           # End-user guide ⭐ START HERE
 ├── Makefile                 # Root build system
 ├── go.mod                   # Go dependencies
 └── README.md               # This file
@@ -145,7 +171,7 @@ price(t+1) = max(0, price(t) + α × (dwell(t) - budget))
 
 **Where:**
 - `α = 0.5` (step size, proven stable for 0 < α < 2)
-- `budget = 5 seconds` (configurable)
+- `budget = 5 seconds` (configurable via `--budget`)
 - `dwell(t)` = measured file dwell time at iteration t
 
 **Why ADMM?**
@@ -213,8 +239,7 @@ Observed on Ubuntu 25.10 (kernel 6.17), Go 1.25, VM environment:
   - Prometheus registry exposed at /metrics via promhttp
   - Safe to scrape at 1s intervals; web UI auto-refreshes every second
 
-Notes:
-- Exact numbers vary with workload and hardware. The above reflects indicative behavior from today’s validation on an Ubuntu 25.10 VM.
+**Note:** Exact numbers vary with workload and hardware. The above reflects indicative behavior from validation on an Ubuntu 25.10 VM.
 
 ## Security Considerations
 
@@ -230,6 +255,7 @@ Notes:
 - Use AppArmor/SELinux profiles to restrict daemon
 - Monitor daemon logs for anomalies
 - Limit enforcement to specific users/groups
+- **Start in observation mode** (no `--enable-enforcement` flag) to learn your workload
 
 ## Current Status
 
@@ -248,6 +274,7 @@ Implemented:
   - Mode 2: Continuous (emits on close; use shorter duration for faster feedback)
   - Mode 3: Attack simulation (7s/10s throttled, 15s killed)
 - ✅ Coq proofs compile (stability)
+- ✅ End-user guide with setup/usage/troubleshooting
 
 In Progress:
 - 🚧 Mid‑dwell enforcement (act before file close)
@@ -313,17 +340,13 @@ If you use Dwell-Fiber in research, please cite:
 
 I drew on optimization-decomposition ideas for network architectures (notably Doyle & Chiang, 2007) and the broader NUM literature, and integrated them with formal verification techniques. An associated Universal Decomposition Canon (a distilled 'Thoughtbase) was used to generate decomposition heuristics and sigil library used for sigil remapping.
 
-A Thoughtbase is a structured, retrievable, and interconnected mesh of thoughts about information. The Insight Cluster is the fundamental, indivisible unit of a Thoughtbase. It is a cognitively potent node that encapsulates a single, distilled "thought," forged from the raw chaos of unstructured data.
-TBIC pre-compute meaning and relationships. They enable AI to recognize patterns, contrast ideas, and generate nuanced strategies by giving it a deep, conceptual map of knowledge, turning data into AI-native actionable assets.
+A Thoughtbase is a structured, retrievable, and interconnected mesh of thoughts about information. The Insight Cluster is the fundamental, indivisible unit of a Thoughtbase. It is a cognitively potent node that encapsulates a single, distilled "thought," forged from the raw chaos of unstructured data. TBIC pre-compute meaning and relationships. They enable AI to recognize patterns, contrast ideas, and generate nuanced strategies by giving it a deep, conceptual map of knowledge, turning data into AI-native actionable assets.
 
 Key influences:
 
-Doyle & Chiang (2007) — "Layering as optimization decomposition" (see docs/overview.md)
-
-Dave Aitel (December 2016) — "Dwell Time" talk at https://youtu.be/PmabStfUdPk
-
-Daniel Miessler Unsupervised Learning Newsletter (2023-) https://newsletter.danielmiessler.com/
-
+- Doyle & Chiang (2007) — "Layering as optimization decomposition" (see docs/overview.md)
+- Dave Aitel (December 2016) — "Dwell Time" talk at https://youtu.be/PmabStfUdPk
+- Daniel Miessler Unsupervised Learning Newsletter (2023-) https://newsletter.danielmiessler.com/
 
 ## References
 

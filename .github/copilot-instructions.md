@@ -1,3 +1,4 @@
+
 # Dwell-Fiber: AI Coding Agent Instructions
 
 ## Project Overview
