@@ -188,13 +188,33 @@ make clean
 
 ## Performance
 
-| Metric | Value |
-|--------|-------|
-| BPF overhead | <100μs per syscall |
-| Control loop frequency | 10 Hz (100ms) |
-| Proof verification | ~180ms |
-| Memory usage | ~50MB (daemon) |
-| CPU usage | <1% (steady state) |
+Observed on Ubuntu 25.10 (kernel 6.17), Go 1.25, VM environment:
+
+- eBPF attach and ring buffer
+  - Tracepoints: sys_enter_openat/sys_enter_close
+  - Events < 0.1s dwell are filtered as noise (reduces load)
+  - Ring buffer remained stable during workload-generator runs
+
+- End-to-end decision latency
+  - Enforcement is triggered on file close (by design)
+  - Close event → decision → metrics update occurs within milliseconds of the close
+  - For continuous mode (-mode=2), the action/logs appear when the file closes
+
+- Controller overhead
+  - ADMM update and decision logic are O(1) per event
+  - Observed CPU overhead negligible in steady state (~sub-1% on the VM)
+  - Daemon memory footprint ~50–80 MB (typical Go HTTP server + metrics)
+
+- Enforcement costs
+  - Throttling: single cgroups v2 write per PID per dedup window (default 10s)
+  - Kill path: SIGTERM (graceful) with fallback to SIGKILL if still alive
+
+- Metrics and UI
+  - Prometheus registry exposed at /metrics via promhttp
+  - Safe to scrape at 1s intervals; web UI auto-refreshes every second
+
+Notes:
+- Exact numbers vary with workload and hardware. The above reflects indicative behavior from today’s validation on an Ubuntu 25.10 VM.
 
 ## Security Considerations
 
