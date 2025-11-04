@@ -213,81 +213,32 @@ make clean
 
 ## Current Status
 
-**Implemented:**
-✅ ADMM price update algorithm  
-✅ Coq stability proofs (verified)  
-✅ BPF program (compiles)  
-✅ HTTP metrics server  
-✅ Web UI with real-time updates  
-✅ Scenario simulation (normal/attack/recovery/idle)
+Implemented:
+- ✅ Real BPF monitoring (attached to sys_enter_openat/sys_enter_close) with ring-buffer events
+- ✅ Enforcement engine live:
+  - Throttling via cgroups v2 (default 20% CPU quota)
+  - Killing on critical dwell (default 15s+), graceful SIGTERM then SIGKILL
+- ✅ Safety controls: protected process list (systemd, init, sshd, NetworkManager, gdm, Xorg, wayland) and self-protection
+- ✅ ADMM controller with α=0.5, budget=5s; responsive rolling average and price updates
+- ✅ Metrics and UI:
+  - Prometheus registry at /metrics (throttled_count, killed_count, enforcement_enabled, dwell, price)
+  - Web UI at / with live status, dwell, price, and enforcement counts
+- ✅ Workload generator with 3 modes:
+  - Mode 1: Full test (quick, immediate events)
+  - Mode 2: Continuous (emits on close; use shorter duration for faster feedback)
+  - Mode 3: Attack simulation (7s/10s throttled, 15s killed)
+- ✅ Coq proofs compile (stability)
 
-**In Progress:**
-🚧 BPF loading via cilium/ebpf  
-🚧 Ring buffer event processing  
-🚧 Process enforcement logic  
-🚧 Systemd integration
+In Progress:
+- 🚧 Mid‑dwell enforcement (act before file close)
+- 🚧 Performance profiling (BPF overhead, ring-buffer drop rate, controller CPU/mem)
+- 🚧 Systemd service packaging and runbook
+- 🚧 CI/integration tests
 
-**Planned:**
-📋 Multi-resource budgets (CPU, memory, network)  
-📋 Distributed enforcement across hosts  
-📋 ML-based anomaly detection  
-📋 Hardware-assisted monitoring (Intel PT)
-
-## Scenarios Demonstrated
-
-The current implementation simulates four scenarios to demonstrate the algorithm:
-
-1. **Normal** (🟢): Dwell oscillates around budget (3-7s)
-   - Price increases when dwell > 5s
-   - Price decreases when dwell < 5s
-
-2. **Attack** (🔴): Sustained high dwell (7-9s)
-   - Simulates ransomware behavior
-   - Price rises quickly to enforce
-
-3. **Recovery** (🟡): Gradually decreasing dwell
-   - Shows system returning to normal
-   - Price decays as dwell drops
-
-4. **Idle** (⚪): Low activity (1-2s)
-   - Price drops to zero
-   - No enforcement needed
-
-**Why?**
-- eBPF programs must be loaded into the kernel
-- Enforcement requires killing/throttling processes
-- Reading from kernel ring buffers requires privileges
-
-**Best Practices:**
-- Run daemon as systemd service with minimal privileges
-- Use AppArmor/SELinux profiles to restrict daemon
-- Monitor daemon logs for anomalies
-- Limit enforcement to specific users/groups
-
-## Current Status
-
-**Implemented:**
-
-✅ ADMM price update algorithm  
-✅ Coq stability proofs (verified)  
-✅ BPF program (compiles)  
-✅ HTTP metrics server  
-✅ Web UI with real-time updates  
-✅ Scenario simulation (normal/attack/recovery/idle)
-
-**In Progress:**
-
-🚧 BPF loading via cilium/ebpf  
-🚧 Ring buffer event processing  
-🚧 Process enforcement logic  
-🚧 Systemd integration
-
-**Planned:**
-
-📋 Multi-resource budgets (CPU, memory, network)  
-📋 Distributed enforcement across hosts  
-📋 ML-based anomaly detection  
-📋 Hardware-assisted monitoring (Intel PT)
+Planned:
+- 📋 Threshold and policy tuning via CLI/config (per‑user/per‑cmd policies)
+- 📋 Adaptive/dynamic thresholds and anomaly detection
+- 📋 Distributed deployment guidance and hardening
 
 ## Scenarios Demonstrated
 
