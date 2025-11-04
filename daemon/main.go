@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -90,14 +91,20 @@ func main() {
 	log.Println("✓ Daemon running (Press Ctrl+C to stop)")
 
 	// Print enforcement info
+	cfg := controller.enforcer.GetConfig()
 	fmt.Println("\n📋 Enforcement Status:")
-	fmt.Println("   Mode: DRY-RUN (no actual enforcement)")
-	fmt.Println("   Throttle threshold: 5.0s")
-	fmt.Println("   Kill threshold: 15.0s")
-	fmt.Println("   Protected: init, systemd, sshd, NetworkManager, gdm")
-	fmt.Println("\n   To enable enforcement: Edit daemon/controller.go")
-	fmt.Println("   Set enfConfig.Enabled = true (line 36)")
-	fmt.Println("   Set enfConfig.KillEnabled = true (line 40) for kills")
+	if cfg.Enabled {
+		mode := "ENFORCEMENT (live)"
+		if !cfg.KillEnabled {
+			mode += " (no killing)"
+		}
+		fmt.Printf("   Mode: %s\n", mode)
+	} else {
+		fmt.Println("   Mode: DRY-RUN (no actual enforcement)")
+	}
+	fmt.Printf("   Throttle threshold: %.1fs\n", cfg.ThrottleThreshold.Seconds())
+	fmt.Printf("   Kill threshold: %.1fs\n", cfg.KillThreshold.Seconds())
+	fmt.Printf("   Protected: %s\n", strings.Join(cfg.ProtectedCmds, ", "))
 
 	// Wait for interrupt
 	sigChan := make(chan os.Signal, 1)
