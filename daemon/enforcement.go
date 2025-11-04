@@ -40,9 +40,13 @@ func generateEnforcementScenarios() []EnforcementTestScenario {
 			Description:     "Processes with < 1s dwell should not trigger any enforcement",
 		},
 		{
-			Name:            "Normal Operations (No Enforcement)",
-			Duration:        10 * time.Second,
-			DwellPattern:    []time.Duration{5 * time.Second, 5.5 * time.Second, 4.8 * time.Second},
+			Name:     "Normal Operations (No Enforcement)",
+			Duration: 10 * time.Second,
+			DwellPattern: []time.Duration{
+				time.Duration(5*1000) * time.Millisecond,
+				time.Duration(5500) * time.Millisecond,
+				time.Duration(4800) * time.Millisecond,
+			},
 			ExpectedActions: []string{"none", "none", "none"},
 			Description:     "Processes with ~5s dwell (at budget) should not trigger enforcement",
 		},
@@ -166,7 +170,6 @@ func (et *EnforcementTest) RunAllScenarios() {
 	fmt.Printf("Total scenarios: %d\n\n", len(et.scenarios))
 
 	passedScenarios := 0
-	failedScenarios := 0
 
 	for _, scenario := range et.scenarios {
 		et.RunScenario(scenario)
