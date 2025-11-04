@@ -63,7 +63,7 @@ func NewController(alpha, budget float64) *Controller {
 		scenario:     "real-bpf",
 		dwellMap:     make(map[int]*DwellInfo),
 		recentDwells: make([]float64, 0),
-		maxRecent:    100, // Keep last 100 measurements
+		maxRecent:    10, // Keep last 10 measurements
 		enforcer:     enforcement.NewEnforcer(enfConfig),
 		dwellGauge: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "dwell_fiber_dwell_time",
@@ -96,16 +96,7 @@ func NewController(alpha, budget float64) *Controller {
 	return c
 }
 
-func (c *Controller) HandleOpenEvent(pid int, cmd string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.dwellMap[pid] = &DwellInfo{
-		PID:      pid,
-		Cmd:      cmd,
-		OpenTime: time.Now(),
-	}
-}
+// Replace the HandleCloseEvent and related functions:
 
 func (c *Controller) HandleCloseEvent(pid int, cmd string, dwell time.Duration) {
 	c.mu.Lock()
@@ -123,8 +114,9 @@ func (c *Controller) HandleCloseEvent(pid int, cmd string, dwell time.Duration) 
 	dwellSeconds := dwell.Seconds()
 	c.recentDwells = append(c.recentDwells, dwellSeconds)
 
-	// Keep only recent measurements
-	if len(c.recentDwells) > c.maxRecent {
+	// Keep only recent measurements - THIS IS KEY: limit to last 10 events
+	// This makes the average responsive to recent changes
+	if len(c.recentDwells) > 10 {
 		c.recentDwells = c.recentDwells[1:]
 	}
 
@@ -166,8 +158,10 @@ func (c *Controller) calculateAverageDwell() float64 {
 
 func (c *Controller) updatePrice(avgDwell float64) {
 	// ADMM price update: p(t+1) = p(t) + α(d(t) - budget)
+	// This should DECREASE when dwell < budget
 	violation := avgDwell - c.Budget
-	c.currentPrice = math.Max(0, c.currentPrice+c.Alpha*violation)
+	newPrice := c.currentPrice + c.Alpha*violation
+	c.currentPrice = math.Max(0, newPrice)
 }
 
 func (c *Controller) RunCleanup() {
