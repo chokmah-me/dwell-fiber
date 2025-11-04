@@ -15,7 +15,8 @@ type Throttler struct {
 	checker *SafetyChecker
 
 	// Track throttled processes
-	throttled map[int]time.Time
+	throttled        map[int]time.Time
+	throttleAttempts int // NEW: count attempts, not just unique PIDs
 }
 
 // NewThrottler creates a new throttler
@@ -53,6 +54,7 @@ func (t *Throttler) Throttle(pid int, cmd string, dwell time.Duration) error {
 	// Try cgroups v2 first
 	if err := t.throttleCgroupV2(pid); err == nil {
 		t.throttled[pid] = time.Now()
+		t.throttleAttempts++ // NEW
 		return nil
 	}
 
@@ -62,6 +64,7 @@ func (t *Throttler) Throttle(pid int, cmd string, dwell time.Duration) error {
 	}
 
 	t.throttled[pid] = time.Now()
+	t.throttleAttempts++ // NEW
 	return nil
 }
 
@@ -123,4 +126,9 @@ func (t *Throttler) CleanupThrottled() {
 // GetThrottledCount returns number of currently throttled processes
 func (t *Throttler) GetThrottledCount() int {
 	return len(t.throttled)
+}
+
+// GetThrottleAttempts returns total throttle attempts (NEW)
+func (t *Throttler) GetThrottleAttempts() int {
+	return t.throttleAttempts
 }
