@@ -356,7 +356,6 @@ Daniel Miessler Unsupervised Learning Newsletter (2023-) https://newsletter.dani
 
 ## References
 
-- [ADMM Paper](http://stanford.edu/~boyd/papers/admm_distr_stats.html) - Boyd et al., "Distributed Optimization and Statistical Learning via ADMM"
 - [eBPF Documentation](https://ebpf.io/)
 - [Coq Proof Assistant](https://coq.inria.fr/)
 - [libbpf](https://github.com/libbpf/libbpf)
