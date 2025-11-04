@@ -4,10 +4,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func StartMetricsServer(port int, ctrl *Controller) {
-	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+	// Expose all registered Prometheus metrics (including throttled/killed/enforcement)
+	http.Handle("/metrics", promhttp.Handler())
+
+	// Keep legacy, human-readable text metrics for debugging (now at /metrics-basic)
+	http.HandleFunc("/metrics-basic", func(w http.ResponseWriter, r *http.Request) {
 		price, dwell, updated, scenario := ctrl.GetState()
 
 		w.Header().Set("Content-Type", "text/plain")
@@ -28,6 +34,8 @@ func StartMetricsServer(port int, ctrl *Controller) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		price, dwell, _, scenario := ctrl.GetState()
 		violation := dwell - ctrl.Budget
+		throttled, killed := ctrl.enforcer.GetStats()
+		enabled := ctrl.enforcer.GetConfig().Enabled
 
 		// Determine status
 		status := "NORMAL"
@@ -100,6 +108,19 @@ func StartMetricsServer(port int, ctrl *Controller) {
         <code style="color: #dcdcaa;">p(t+1) = max(0, %.6f + %.2f * %.4f)</code>
     </div>
     
+    <div class="metric">
+        <span class="label">Enforcement:</span>
+        <span class="value">%s</span>
+    </div>
+    <div class="metric">
+        <span class="label">Throttled count:</span>
+        <span class="value">%d</span>
+    </div>
+    <div class="metric">
+        <span class="label">Killed count:</span>
+        <span class="value">%d</span>
+    </div>
+    
     <hr style="border-color: #444;">
     
     <div style="color: #666; font-size: 0.9em;">
@@ -128,6 +149,14 @@ func StartMetricsServer(port int, ctrl *Controller) {
 			}(),
 			price,
 			price, ctrl.Alpha, violation,
+			func() string {
+				if enabled {
+					return "ENABLED"
+				}
+				return "DRY-RUN"
+			}(),
+			throttled,
+			killed,
 		)
 	})
 
