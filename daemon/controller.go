@@ -102,8 +102,8 @@ func (c *Controller) HandleCloseEvent(pid int, cmd string, dwell time.Duration) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Filter out noise: only process events > 2 seconds (as suggested)
-	if dwell < 2*time.Second {
+	// Filter out noise: only process events > 1 seconds (as suggested)
+	if dwell < 1*time.Second {
 		return // Silently skip noise
 	}
 
