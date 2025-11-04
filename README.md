@@ -260,25 +260,6 @@ Planned:
 - 📋 Adaptive/dynamic thresholds and anomaly detection
 - 📋 Distributed deployment guidance and hardening
 
-## Scenarios Demonstrated
-
-The current implementation simulates four scenarios to demonstrate the algorithm:
-
-1. **Normal** (🟢): Dwell oscillates around budget (3-7s)
-   - Price increases when dwell > 5s
-   - Price decreases when dwell < 5s
-
-2. **Attack** (🔴): Sustained high dwell (7-9s)
-   - Simulates ransomware behavior
-   - Price rises quickly to enforce
-
-3. **Recovery** (🟡): Gradually decreasing dwell
-   - Shows system returning to normal
-   - Price decays as dwell drops
-
-4. **Idle** (⚪): Low activity (1-2s)
-   - Price drops to zero
-   - No enforcement needed
 
 ## Contributing
 
@@ -311,7 +292,7 @@ If you use Dwell-Fiber in research, please cite:
 
 ## Acknowledgments
 
-I drew on optimization-decomposition ideas for network architectures (notably Doyle & Chiang, 2007) and the broader NUM literature, and integrated them with formal verification techniques. An associated Universal Decomposition Canon (a distilled 'Thoughtbase) was used to generate decomposition heuristics and sigil library used for sigil remapping.
+I drew on optimization-decomposition ideas for network architectures (notably Doyle & Chiang, 2007) and the broader NUM literature, and integrated them with formal verification techniques. An associated proprietary Universal Decomposition Canon artifact (a distilled 'Thoughtbase) was used to generate decomposition heuristics and sigil library used for sigil remapping.
 
 A Thoughtbase is a structured, retrievable, and interconnected mesh of thoughts about information. The Insight Cluster is the fundamental, indivisible unit of a Thoughtbase. It is a cognitively potent node that encapsulates a single, distilled "thought," forged from the raw chaos of unstructured data.
 TBIC pre-compute meaning and relationships. They enable AI to recognize patterns, contrast ideas, and generate nuanced strategies by giving it a deep, conceptual map of knowledge, turning data into AI-native actionable assets.
