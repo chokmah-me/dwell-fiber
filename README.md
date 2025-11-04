@@ -253,7 +253,6 @@ The current implementation simulates four scenarios to demonstrate the algorithm
    - Price drops to zero
    - No enforcement needed
 
-=======
 **Why?**
 - eBPF programs must be loaded into the kernel
 - Enforcement requires killing/throttling processes
@@ -268,6 +267,7 @@ The current implementation simulates four scenarios to demonstrate the algorithm
 ## Current Status
 
 **Implemented:**
+
 ✅ ADMM price update algorithm  
 ✅ Coq stability proofs (verified)  
 ✅ BPF program (compiles)  
@@ -276,12 +276,14 @@ The current implementation simulates four scenarios to demonstrate the algorithm
 ✅ Scenario simulation (normal/attack/recovery/idle)
 
 **In Progress:**
+
 🚧 BPF loading via cilium/ebpf  
 🚧 Ring buffer event processing  
 🚧 Process enforcement logic  
 🚧 Systemd integration
 
 **Planned:**
+
 📋 Multi-resource budgets (CPU, memory, network)  
 📋 Distributed enforcement across hosts  
 📋 ML-based anomaly detection  
