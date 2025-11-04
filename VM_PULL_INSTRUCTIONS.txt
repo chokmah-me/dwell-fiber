@@ -1,0 +1,344 @@
+#!/bin/bash
+# dwell-fiber VM Pull & Setup Instructions
+# Copy-paste these commands into your Ubuntu 25.10 VM
+
+cat << 'EOF'
+╔════════════════════════════════════════════════════════════════════════════╗
+║     DWELL-FIBER: VM PULL & SETUP INSTRUCTIONS                             ║
+║                 Ubuntu 25.10 - Copy & Paste Commands                       ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+FASTEST START (Automated Setup)
+═══════════════════════════════════════════════════════════════════════════
+
+If you have the vm-setup.sh script:
+
+  $ wget https://raw.githubusercontent.com/dyb5784/dwell-fiber/main/vm-setup.sh
+  $ bash vm-setup.sh
+
+This will:
+  ✓ Update system
+  ✓ Install all dependencies
+  ✓ Fix Ubuntu 25.10 asm symlink (CRITICAL)
+  ✓ Clone repo
+  ✓ Build everything
+  ✓ Verify build
+
+Then jump to "START TESTING" section below.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+MANUAL SETUP (Step-by-step)
+═════════════════════════════════════════════════════════════════════════════
+
+# Step 1: Update system
+sudo apt-get update
+sudo apt-get upgrade -y
+
+# Step 2: Install dependencies
+sudo apt-get install -y \
+    clang llvm libbpf-dev \
+    linux-headers-$(uname -r) \
+    golang-go coq make git \
+    netcat-openbsd python3
+
+# Step 3: CRITICAL - Fix Ubuntu 25.10 asm symlink
+# This is ESSENTIAL for eBPF compilation
+sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
+
+# Verify it worked
+ls -la /usr/include/asm
+# Should show: asm -> /usr/include/x86_64-linux-gnu/asm
+
+# Step 4: Clone repository (first time)
+cd $HOME
+git clone https://github.com/dyb5784/dwell-fiber.git
+cd dwell-fiber
+
+# OR: Update existing repo
+cd dwell-fiber
+git fetch origin
+git pull origin main
+
+# Step 5: Build everything
+make clean all
+
+# This builds:
+#   ✓ BPF programs (bpf/dwell_monitor.bpf.o)
+#   ✓ Coq proofs (coq/dwell_stable.vo)
+#   ✓ Go daemon (bin/dwell-fiber-daemon)
+
+# Step 6: Verify build
+ls -la bin/dwell-fiber-daemon
+file bin/dwell-fiber-daemon  # Should show: ELF 64-bit
+
+═════════════════════════════════════════════════════════════════════════════
+
+START TESTING
+═════════════════════════════════════════════════════════════════════════════
+
+OPTION 1: Quick Simulation Test (No root required)
+────────────────────────────────────────────────────
+
+Terminal 1 - Start daemon:
+  $ cd ~/dwell-fiber
+  $ ./bin/dwell-fiber-daemon --simulate
+
+Expected:
+  🛡️  Dwell-Fiber Daemon Starting
+  ✓ Metrics server listening on :9090
+  ✓ Daemon running (Press Ctrl+C to stop)
+
+Terminal 2 - Monitor metrics:
+  $ watch -n 1 'curl -s http://localhost:9090/metrics'
+
+Terminal 3 - Open dashboard (on your host):
+  Open Firefox: http://<VM_IP>:9090
+  # Where <VM_IP> is your VM's IP address
+
+Terminal 4 - Generate workload:
+  $ cd ~/dwell-fiber/test
+  $ go run workload_generator.go
+
+Watch the dashboard update with:
+  - Dwell time: 5-9 seconds (matches workload)
+  - Price: increases from 0.1 → 0.3+
+  - Status: 🟡 HIGH DWELL (red)
+
+Press Ctrl+C on Terminal 1 to stop.
+
+═════════════════════════════════════════════════════════════════════════════
+
+OPTION 2: Real BPF Testing (Requires root + Ubuntu 25.10)
+──────────────────────────────────────────────────────────
+
+Terminal 1 - Start daemon with real BPF:
+  $ cd ~/dwell-fiber
+  $ sudo ./bin/dwell-fiber-daemon --alpha=0.5 --budget=5.0
+
+Expected output:
+  🛡️  Dwell-Fiber Daemon Starting
+  ✓ BPF program loaded
+  ✓ Ring buffer reader started
+  ✓ Attached to sys_enter_openat
+  ✓ Attached to sys_enter_close
+  ✓ BPF integration active
+  ✓ Running with REAL BPF monitoring
+
+Terminal 2 - Generate workload:
+  $ cd ~/dwell-fiber/test
+  $ go run workload_generator.go
+
+Terminal 3 - Monitor enforcement decisions:
+  $ tail -f /var/log/syslog | grep -i "high dwell"
+
+Expected:
+  high dwell: PID=12345 (bash) dwell=5.00s
+  high dwell: PID=12346 (bash) dwell=7.00s
+  high dwell: PID=12347 (bash) dwell=9.00s
+
+Terminal 4 - Open dashboard:
+  http://<VM_IP>:9090
+
+Watch real-time updates as files are opened/closed!
+
+═════════════════════════════════════════════════════════════════════════════
+
+OPTION 3: Full Integration Test (Automated)
+────────────────────────────────────────────
+
+Run the complete automated test:
+  $ cd ~/dwell-fiber
+  $ chmod +x test/test-suite.sh
+  $ ./test/test-suite.sh
+
+This will:
+  1. Build daemon
+  2. Start daemon
+  3. Generate high-dwell workload
+  4. Collect metrics
+  5. Validate output
+  6. Report results
+
+Expected output:
+  ✓ Build: Success
+  ✓ Daemon: Running
+  ✓ Workload: Generated
+  ✓ Metrics: Available
+  → Open: http://localhost:9090
+
+═════════════════════════════════════════════════════════════════════════════
+
+GIT COMMANDS FOR VM
+═════════════════════════════════════════════════════════════════════════════
+
+Check current status:
+  $ cd ~/dwell-fiber
+  $ git status
+
+See all commits:
+  $ git log --oneline | head -10
+
+Pull latest changes:
+  $ git pull origin main
+
+Check what changed:
+  $ git diff HEAD~1 HEAD
+
+See a specific commit:
+  $ git show <commit_hash>
+
+View specific file changes:
+  $ git diff daemon/controller.go
+
+═════════════════════════════════════════════════════════════════════════════
+
+USEFUL COMMANDS FOR TESTING
+═════════════════════════════════════════════════════════════════════════════
+
+Quick build cycle:
+  $ make daemon && ./bin/dwell-fiber-daemon --simulate
+
+Check metrics:
+  $ curl http://localhost:9090/metrics
+
+Get VM IP (to access from host machine):
+  $ hostname -I
+
+Monitor system logs for enforcement:
+  $ grep "High dwell" /var/log/syslog
+
+Kill daemon if stuck:
+  $ pkill dwell-fiber-daemon
+
+Watch for events:
+  $ sudo dmesg | tail -20
+
+View test documentation:
+  $ cat TESTING.md
+  $ cat test/QUICK_REFERENCE.sh
+  $ cat TROUBLESHOOTING.md
+
+Full setup guide:
+  $ cat VM_SETUP_GUIDE.md
+
+═════════════════════════════════════════════════════════════════════════════
+
+DASHBOARD ACCESS
+═════════════════════════════════════════════════════════════════════════════
+
+If running on VM with GUI:
+  $ firefox http://localhost:9090
+
+If running on VM without GUI (headless):
+  On your host machine:
+  1. Get VM IP: ssh ubuntu@<VM_IP> 'hostname -I'
+  2. Open Firefox: http://<VM_IP>:9090
+  
+  Example:
+  $ ssh ubuntu@192.168.1.100 'hostname -I'
+  192.168.1.100
+  # Then open: http://192.168.1.100:9090
+
+═════════════════════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING
+═════════════════════════════════════════════════════════════════════════════
+
+If build fails with "asm/types.h":
+  $ sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
+  $ make clean all
+
+If BPF won't load:
+  $ dmesg | tail -20
+  $ uname -r  # Verify kernel 5.8+
+
+If no events appear:
+  $ cd test && go run workload_generator.go
+  $ sudo tail -f /var/log/syslog | grep "high dwell"
+
+If metrics don't update:
+  $ curl http://localhost:9090/metrics
+  $ ps aux | grep dwell-fiber
+
+For complete troubleshooting:
+  $ cat TROUBLESHOOTING.md
+
+═════════════════════════════════════════════════════════════════════════════
+
+EXPECTED RESULTS
+═════════════════════════════════════════════════════════════════════════════
+
+Simulation Mode:
+  ✓ Daemon starts
+  ✓ Dashboard loads
+  ✓ Metrics update
+  ✓ Price oscillates
+  ✓ Dwell time shows 4-6 seconds
+
+Real BPF Mode:
+  ✓ BPF loads
+  ✓ Events captured
+  ✓ "High dwell" logged for significant events
+  ✓ Enforcement decisions shown
+  ✓ Price increases with sustained high dwell
+  ✓ Dashboard updates in real-time
+
+Integration Test:
+  ✓ All components pass
+  ✓ Clear pass/fail reporting
+  ✓ Next steps provided
+
+═════════════════════════════════════════════════════════════════════════════
+
+QUICK REFERENCE
+═════════════════════════════════════════════════════════════════════════════
+
+One-liner to start everything:
+  # Terminal 1
+  $ cd ~/dwell-fiber && make daemon && ./bin/dwell-fiber-daemon --simulate
+  
+  # Terminal 2 (after Terminal 1 shows "Daemon running")
+  $ cd ~/dwell-fiber/test && go run workload_generator.go
+  
+  # Terminal 3 (on host machine)
+  $ firefox http://<VM_IP>:9090
+
+Real BPF one-liner:
+  # Terminal 1
+  $ cd ~/dwell-fiber && make clean all && sudo ./bin/dwell-fiber-daemon
+  
+  # Terminal 2
+  $ cd ~/dwell-fiber/test && go run workload_generator.go
+  
+  # Terminal 3
+  $ sudo tail -f /var/log/syslog | grep "high dwell"
+
+═════════════════════════════════════════════════════════════════════════════
+
+SUCCESS CRITERIA
+═════════════════════════════════════════════════════════════════════════════
+
+System is working correctly when:
+
+  ✓ Daemon builds without errors
+  ✓ Daemon starts in simulation mode
+  ✓ Dashboard loads on http://localhost:9090
+  ✓ Metrics respond at http://localhost:9090/metrics
+  ✓ Workload generates files
+  ✓ Dashboard shows dwell time
+  ✓ Dashboard shows price updates
+  ✓ Dashboard shows status (green/yellow/red)
+  ✓ Real BPF mode shows "High dwell" events
+  ✓ Integration test passes
+
+═════════════════════════════════════════════════════════════════════════════
+
+Ready to test! 🛡️
+
+For any issues:
+  1. Check TROUBLESHOOTING.md
+  2. Review TESTING.md
+  3. See TEST_ARCHITECTURE.md for details
+  4. Run: cat test/QUICK_REFERENCE.sh
+EOF
