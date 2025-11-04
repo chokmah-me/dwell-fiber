@@ -5,7 +5,7 @@ import (
 	"math"
 	"sync"
 	"time"
-	
+
 	"github.com/dyb5784/dwell-fiber/pkg/enforcement"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -14,22 +14,22 @@ type Controller struct {
 	Alpha  float64 // Exported for metrics
 	Budget float64 // Exported for metrics
 	mu     sync.RWMutex
-	
+
 	// State
 	currentPrice float64
 	lastUpdate   time.Time
 	scenario     string
-	
+
 	// Real BPF tracking
 	dwellMap map[int]*DwellInfo // PID -> dwell info
-	
+
 	// Recent dwell times for averaging
 	recentDwells []float64
 	maxRecent    int
-	
+
 	// Enforcement
 	enforcer *enforcement.Enforcer
-	
+
 	// Metrics
 	dwellGauge      prometheus.Gauge
 	priceGauge      prometheus.Gauge
@@ -54,7 +54,7 @@ func NewController(alpha, budget float64) *Controller {
 	enfConfig.ThrottleCPUQuota = 20
 	enfConfig.KillThreshold = 15 * time.Second
 	enfConfig.KillEnabled = false
-	
+
 	c := &Controller{
 		Alpha:        alpha,
 		Budget:       budget,
@@ -86,20 +86,20 @@ func NewController(alpha, budget float64) *Controller {
 			Help: "Enforcement mode (0=dry-run, 1=enabled)",
 		}),
 	}
-	
+
 	prometheus.MustRegister(c.dwellGauge)
 	prometheus.MustRegister(c.priceGauge)
 	prometheus.MustRegister(c.throttledGauge)
 	prometheus.MustRegister(c.killedGauge)
 	prometheus.MustRegister(c.enforcementMode)
-	
+
 	return c
 }
 
 func (c *Controller) HandleOpenEvent(pid int, cmd string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.dwellMap[pid] = &DwellInfo{
 		PID:      pid,
 		Cmd:      cmd,
@@ -107,63 +107,60 @@ func (c *Controller) HandleOpenEvent(pid int, cmd string) {
 	}
 }
 
-func (c *Controller) HandleCloseEvent(pid int) {
+func (c *Controller) HandleCloseEvent(pid int, cmd string, dwell time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
-	info, exists := c.dwellMap[pid]
-	if !exists {
-		return
+
+	// Filter out noise: only process events > 2 seconds (as suggested)
+	if dwell < 2*time.Second {
+		return // Silently skip noise
 	}
-	
-	info.CloseTime = time.Now()
-	info.Dwell = info.CloseTime.Sub(info.OpenTime)
-	
+
+	// Log high-dwell events for visibility
+	fmt.Printf("⏱️  High dwell: PID=%d (%s) dwell=%.2fs\n", pid, cmd, dwell.Seconds())
+
 	// Store dwell time for averaging
-	dwellSeconds := info.Dwell.Seconds()
+	dwellSeconds := dwell.Seconds()
 	c.recentDwells = append(c.recentDwells, dwellSeconds)
-	
+
 	// Keep only recent measurements
 	if len(c.recentDwells) > c.maxRecent {
 		c.recentDwells = c.recentDwells[1:]
 	}
-	
+
 	// Apply enforcement for significant dwell
-	if info.Dwell > time.Second {
-		if err := c.enforcer.Enforce(info.PID, info.Cmd, info.Dwell); err != nil {
+	if dwell > time.Second {
+		if err := c.enforcer.Enforce(pid, cmd, dwell); err != nil {
 			fmt.Printf("⚠️  Enforcement error: %v\n", err)
 		}
 	}
-	
+
 	// Update metrics
 	avgDwell := c.calculateAverageDwell()
 	c.dwellGauge.Set(avgDwell)
-	
+
 	// Update price using ADMM
 	c.updatePrice(avgDwell)
 	c.priceGauge.Set(c.currentPrice)
 	c.lastUpdate = time.Now()
-	
+
 	// Update enforcement metrics
 	throttled, killed := c.enforcer.GetStats()
 	c.throttledGauge.Set(float64(throttled))
 	c.killedGauge.Set(float64(killed))
 	c.enforcementMode.Set(0.0) // Dry-run mode
-	
-	// Cleanup old entries
-	delete(c.dwellMap, pid)
 }
 
 func (c *Controller) calculateAverageDwell() float64 {
 	if len(c.recentDwells) == 0 {
 		return 0
 	}
-	
+
 	var total float64
 	for _, dwell := range c.recentDwells {
 		total += dwell
 	}
-	
+
 	return total / float64(len(c.recentDwells))
 }
 
@@ -176,13 +173,13 @@ func (c *Controller) updatePrice(avgDwell float64) {
 func (c *Controller) RunCleanup() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		c.mu.Lock()
-		
+
 		// Cleanup enforcement tracking
 		c.enforcer.Cleanup()
-		
+
 		// Cleanup old dwell entries
 		cutoff := time.Now().Add(-1 * time.Minute)
 		for pid, info := range c.dwellMap {
@@ -190,7 +187,7 @@ func (c *Controller) RunCleanup() {
 				delete(c.dwellMap, pid)
 			}
 		}
-		
+
 		c.mu.Unlock()
 	}
 }
