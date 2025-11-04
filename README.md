@@ -90,8 +90,20 @@ sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
 ### Build
 
 ```bash
+<<<<<<< HEAD
 git clone https://github.com/dyb5784/dwell-fiber.git
 cd dwell-fiber
+
+# Build all components
+make all
+
+# Verify mathematical proofs (180ms)
+make verify
+```
+=======
+git clone https://github.com/dyb5784/dwell-fiber.git
+cd dwell-fiber
+>>>>>>> c3ff5d24121193f7e9339d916d1595e3b9f93c35
 
 # Build all components
 make all
@@ -105,6 +117,7 @@ make verify
 ```bash
 # Start daemon (requires root for BPF)
 sudo ./bin/dwell-fiber-daemon --alpha=0.5 --budget=5.0
+<<<<<<< HEAD
 
 # In another terminal, check status
 curl http://localhost:9090/health
@@ -113,11 +126,53 @@ curl http://localhost:9090/metrics
 # Or open web UI
 firefox http://localhost:9090
 ```
+=======
+>>>>>>> c3ff5d24121193f7e9339d916d1595e3b9f93c35
 
+# In another terminal, check status
+curl http://localhost:9090/health
+curl http://localhost:9090/metrics
+
+<<<<<<< HEAD
+The system is **proven** to satisfy (see `coq/dwell_stable.v`):
+=======
+# Or open web UI
+firefox http://localhost:9090
+```
+>>>>>>> c3ff5d24121193f7e9339d916d1595e3b9f93c35
+
+<<<<<<< HEAD
+✅ **Convergence**: Price reaches optimal value in finite time  
+✅ **Constraint Satisfaction**: Dwell time eventually stays ≤ 5 seconds  
+✅ **Boundedness**: Price never goes negative or infinite  
+✅ **Stability**: No oscillations or divergence  
+✅ **Parameter Range**: Works for any step size 0 < α < 2
+
+=======
+>>>>>>> c3ff5d24121193f7e9339d916d1595e3b9f93c35
 ## Repository Structure
 
 ```
 dwell-fiber/
+<<<<<<< HEAD
+├── bpf/              # eBPF kernel programs
+│   ├── dwell_monitor.bpf.c   # File dwell time tracker
+│   └── Makefile
+├── coq/              # Formal proofs
+│   ├── dwell_stable.v        # Stability proof (ADMM)
+│   └── Makefile
+├── daemon/           # Control daemon (Go)
+│   ├── main.go              # Entry point
+│   ├── controller.go        # ADMM implementation
+│   └── metrics.go           # HTTP metrics server
+├── cmd/              # Command-line tools
+├── pkg/              # Reusable packages
+├── scripts/          # Helper scripts
+├── docs/             # Documentation
+├── Makefile          # Root build system
+├── go.mod            # Go dependencies
+└── README.md         # This file
+=======
 ├── bpf/                      # eBPF kernel programs
 │   ├── dwell_monitor.bpf.c   # File dwell time tracker
 │   └── Makefile
@@ -135,6 +190,7 @@ dwell-fiber/
 ├── Makefile                 # Root build system
 ├── go.mod                   # Go dependencies
 └── README.md               # This file
+>>>>>>> c3ff5d24121193f7e9339d916d1595e3b9f93c35
 ```
 
 ## ADMM Algorithm
@@ -202,6 +258,61 @@ make clean
 
 ⚠️ **This system requires root/CAP_BPF privileges**
 
+<<<<<<< HEAD
+**Why?**
+- eBPF programs must be loaded into the kernel
+- Enforcement requires killing/throttling processes
+- Reading from kernel ring buffers requires privileges
+
+**Best Practices:**
+- Run daemon as systemd service with minimal privileges
+- Use AppArmor/SELinux profiles to restrict daemon
+- Monitor daemon logs for anomalies
+- Limit enforcement to specific users/groups
+
+## Current Status
+
+**Implemented:**
+✅ ADMM price update algorithm  
+✅ Coq stability proofs (verified)  
+✅ BPF program (compiles)  
+✅ HTTP metrics server  
+✅ Web UI with real-time updates  
+✅ Scenario simulation (normal/attack/recovery/idle)
+
+**In Progress:**
+🚧 BPF loading via cilium/ebpf  
+🚧 Ring buffer event processing  
+🚧 Process enforcement logic  
+🚧 Systemd integration
+
+**Planned:**
+📋 Multi-resource budgets (CPU, memory, network)  
+📋 Distributed enforcement across hosts  
+📋 ML-based anomaly detection  
+📋 Hardware-assisted monitoring (Intel PT)
+
+## Scenarios Demonstrated
+
+The current implementation simulates four scenarios to demonstrate the algorithm:
+
+1. **Normal** (🟢): Dwell oscillates around budget (3-7s)
+   - Price increases when dwell > 5s
+   - Price decreases when dwell < 5s
+
+2. **Attack** (🔴): Sustained high dwell (7-9s)
+   - Simulates ransomware behavior
+   - Price rises quickly to enforce
+
+3. **Recovery** (🟡): Gradually decreasing dwell
+   - Shows system returning to normal
+   - Price decays as dwell drops
+
+4. **Idle** (⚪): Low activity (1-2s)
+   - Price drops to zero
+   - No enforcement needed
+
+=======
 **Why?**
 - eBPF programs must be loaded into the kernel
 - Enforcement requires killing/throttling processes
@@ -267,6 +378,7 @@ Contributions welcome! Areas of interest:
 
 Please open an issue before starting major work.
 
+>>>>>>> c3ff5d24121193f7e9339d916d1595e3b9f93c35
 ## License
 
 MIT License - See [LICENSE](LICENSE) file
@@ -293,8 +405,17 @@ TBIC pre-compute meaning and relationships. They enable AI to recognize patterns
 
 Key influences:
 
+<<<<<<< HEAD
+Doyle & Chiang (2007) — "Layering as optimization decomposition" (see docs/overview.md)
+=======
 Doyle & Chiang (2007) — "Layering as optimization decomposition" (see docs/overview.md)
 Dave Aitel (December 2016) — "Dwell Time" talk at https://youtu.be/PmabStfUdPk
+Daniel Miessler (2023-) https://newsletter.danielmiessler.com/
+>>>>>>> c3ff5d24121193f7e9339d916d1595e3b9f93c35
+
+<<<<<<< HEAD
+Dave Aitel (December 2016) — "Dwell Time" talk at https://youtu.be/PmabStfUdPk
+
 Daniel Miessler (2023-) https://newsletter.danielmiessler.com/
 
 ## References
@@ -310,3 +431,20 @@ Daniel Miessler (2023-) https://newsletter.danielmiessler.com/
 **Last Updated:** October 31, 2025  
 **Maintainer:** [@dyb5784](https://github.com/dyb5784)
 
+
+=======
+## References
+
+- [ADMM Paper](http://stanford.edu/~boyd/papers/admm_distr_stats.html) - Boyd et al., "Distributed Optimization and Statistical Learning via ADMM"
+- [eBPF Documentation](https://ebpf.io/)
+- [Coq Proof Assistant](https://coq.inria.fr/)
+- [libbpf](https://github.com/libbpf/libbpf)
+
+---
+
+**Status:** Active Development  
+**Last Updated:** October 31, 2025  
+**Maintainer:** [@dyb5784](https://github.com/dyb5784)
+
+
+>>>>>>> c3ff5d24121193f7e9339d916d1595e3b9f93c35
