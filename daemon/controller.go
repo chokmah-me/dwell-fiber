@@ -1,85 +1,203 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"sync"
 	"time"
+	
+	"github.com/dyb5784/dwell-fiber/pkg/enforcement"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Controller struct {
-	mu        sync.RWMutex
-	Alpha     float64
-	Budget    float64
-	Price     float64
-	Dwell     float64
-	UpdatedAt time.Time
+	Alpha  float64 // Exported for metrics
+	Budget float64 // Exported for metrics
+	mu     sync.RWMutex
+	
+	// State
+	currentPrice float64
+	lastUpdate   time.Time
+	scenario     string
+	
+	// Real BPF tracking
+	dwellMap map[int]*DwellInfo // PID -> dwell info
+	
+	// Recent dwell times for averaging
+	recentDwells []float64
+	maxRecent    int
+	
+	// Enforcement
+	enforcer *enforcement.Enforcer
+	
+	// Metrics
+	dwellGauge      prometheus.Gauge
+	priceGauge      prometheus.Gauge
+	throttledGauge  prometheus.Gauge
+	killedGauge     prometheus.Gauge
+	enforcementMode prometheus.Gauge
 }
 
-// UpdatePrice implements the ADMM price update
-func (c *Controller) UpdatePrice(ctx context.Context) error {
+type DwellInfo struct {
+	PID       int
+	Cmd       string
+	OpenTime  time.Time
+	CloseTime time.Time
+	Dwell     time.Duration
+}
+
+func NewController(alpha, budget float64) *Controller {
+	// Create enforcement config
+	enfConfig := enforcement.DefaultConfig()
+	enfConfig.Enabled = true // Start in dry-run
+	enfConfig.ThrottleThreshold = 5 * time.Second
+	enfConfig.ThrottleCPUQuota = 20
+	enfConfig.KillThreshold = 15 * time.Second
+	enfConfig.KillEnabled = false
+	
+	c := &Controller{
+		Alpha:        alpha,
+		Budget:       budget,
+		currentPrice: 0.1,
+		lastUpdate:   time.Now(),
+		scenario:     "real-bpf",
+		dwellMap:     make(map[int]*DwellInfo),
+		recentDwells: make([]float64, 0),
+		maxRecent:    100, // Keep last 100 measurements
+		enforcer:     enforcement.NewEnforcer(enfConfig),
+		dwellGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_dwell_time",
+			Help: "Current average file dwell time (seconds)",
+		}),
+		priceGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_price",
+			Help: "Current access price",
+		}),
+		throttledGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_throttled_count",
+			Help: "Number of currently throttled processes",
+		}),
+		killedGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_killed_count",
+			Help: "Number of killed processes",
+		}),
+		enforcementMode: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_enforcement_enabled",
+			Help: "Enforcement mode (0=dry-run, 1=enabled)",
+		}),
+	}
+	
+	prometheus.MustRegister(c.dwellGauge)
+	prometheus.MustRegister(c.priceGauge)
+	prometheus.MustRegister(c.throttledGauge)
+	prometheus.MustRegister(c.killedGauge)
+	prometheus.MustRegister(c.enforcementMode)
+	
+	return c
+}
+
+func (c *Controller) HandleOpenEvent(pid int, cmd string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	// Get current dwell time from BPF
-	dwell, err := c.GetDwellTime()
-	if err != nil {
-		return fmt.Errorf("failed to get dwell time: %w", err)
-	}
-
-	c.Dwell = dwell
-
-	// ADMM update: price_new = max(0, price_old + α*(dwell - budget))
-	violation := dwell - c.Budget
-	newPrice := c.Price + c.Alpha*violation
 	
-	// Project to non-negative orthant
-	if newPrice < 0 {
-		newPrice = 0
+	c.dwellMap[pid] = &DwellInfo{
+		PID:      pid,
+		Cmd:      cmd,
+		OpenTime: time.Now(),
 	}
+}
 
-	c.Price = newPrice
-	c.UpdatedAt = time.Now()
-
-	// Enforce if price is high
-	if c.Price > 1.0 {
-		if err := c.EnforcePrice(); err != nil {
-			return fmt.Errorf("enforcement failed: %w", err)
+func (c *Controller) HandleCloseEvent(pid int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	info, exists := c.dwellMap[pid]
+	if !exists {
+		return
+	}
+	
+	info.CloseTime = time.Now()
+	info.Dwell = info.CloseTime.Sub(info.OpenTime)
+	
+	// Store dwell time for averaging
+	dwellSeconds := info.Dwell.Seconds()
+	c.recentDwells = append(c.recentDwells, dwellSeconds)
+	
+	// Keep only recent measurements
+	if len(c.recentDwells) > c.maxRecent {
+		c.recentDwells = c.recentDwells[1:]
+	}
+	
+	// Apply enforcement for significant dwell
+	if info.Dwell > time.Second {
+		if err := c.enforcer.Enforce(info.PID, info.Cmd, info.Dwell); err != nil {
+			fmt.Printf("⚠️  Enforcement error: %v\n", err)
 		}
 	}
-
-	return nil
+	
+	// Update metrics
+	avgDwell := c.calculateAverageDwell()
+	c.dwellGauge.Set(avgDwell)
+	
+	// Update price using ADMM
+	c.updatePrice(avgDwell)
+	c.priceGauge.Set(c.currentPrice)
+	c.lastUpdate = time.Now()
+	
+	// Update enforcement metrics
+	throttled, killed := c.enforcer.GetStats()
+	c.throttledGauge.Set(float64(throttled))
+	c.killedGauge.Set(float64(killed))
+	c.enforcementMode.Set(0.0) // Dry-run mode
+	
+	// Cleanup old entries
+	delete(c.dwellMap, pid)
 }
 
-// GetDwellTime retrieves dwell time from BPF
-func (c *Controller) GetDwellTime() (float64, error) {
-	// TODO: Read from BPF ring buffer and aggregate
-	// For now, return simulated value
-	return 3.0, nil
+func (c *Controller) calculateAverageDwell() float64 {
+	if len(c.recentDwells) == 0 {
+		return 0
+	}
+	
+	var total float64
+	for _, dwell := range c.recentDwells {
+		total += dwell
+	}
+	
+	return total / float64(len(c.recentDwells))
 }
 
-// EnforcePrice throttles or kills processes based on price
-func (c *Controller) EnforcePrice() error {
-	// TODO: Implement enforcement logic
-	return nil
+func (c *Controller) updatePrice(avgDwell float64) {
+	// ADMM price update: p(t+1) = p(t) + α(d(t) - budget)
+	violation := avgDwell - c.Budget
+	c.currentPrice = math.Max(0, c.currentPrice+c.Alpha*violation)
 }
 
-// LoadBPF loads the eBPF program
-func (c *Controller) LoadBPF() error {
-	// TODO: Use cilium/ebpf to load BPF program
-	return nil
+func (c *Controller) RunCleanup() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		c.mu.Lock()
+		
+		// Cleanup enforcement tracking
+		c.enforcer.Cleanup()
+		
+		// Cleanup old dwell entries
+		cutoff := time.Now().Add(-1 * time.Minute)
+		for pid, info := range c.dwellMap {
+			if info.OpenTime.Before(cutoff) && info.CloseTime.IsZero() {
+				delete(c.dwellMap, pid)
+			}
+		}
+		
+		c.mu.Unlock()
+	}
 }
 
-// UnloadBPF unloads the eBPF program
-func (c *Controller) UnloadBPF() error {
-	// TODO: Cleanup BPF resources
-	return nil
-}
-
-// GetState returns current controller state (thread-safe)
-func (c *Controller) GetState() (price, dwell float64, updatedAt time.Time) {
+// GetState returns state for metrics (4 values for compatibility)
+func (c *Controller) GetState() (price float64, dwell float64, updated time.Time, scenario string) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.Price, c.Dwell, c.UpdatedAt
+	return c.currentPrice, c.calculateAverageDwell(), c.lastUpdate, c.scenario
 }

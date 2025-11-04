@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Dwell-Fiber eBPF Program
- * Monitors file dwell times per process
- */
+/* Dwell-Fiber eBPF Program - File Dwell Time Monitor */
 
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
@@ -31,7 +29,6 @@ struct dwell_value {
     __u32 access_count;
 };
 
-/* Maps */
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, MAX_ENTRIES);
@@ -44,15 +41,14 @@ struct {
     __uint(max_entries, 256 * 1024);
 } events SEC(".maps");
 
-/* Track file open */
 SEC("tracepoint/syscalls/sys_enter_openat")
-int handle_openat_enter(struct trace_event_raw_sys_enter *ctx) {
+int handle_openat_enter(void *ctx) {
     __u64 pid_tgid = bpf_get_current_pid_tgid();
     __u32 pid = pid_tgid >> 32;
     
     struct dwell_key key = {
         .pid = pid,
-        .inode = 0,  // Will be filled on exit
+        .inode = 0,
     };
     
     struct dwell_value value = {
@@ -65,16 +61,15 @@ int handle_openat_enter(struct trace_event_raw_sys_enter *ctx) {
     return 0;
 }
 
-/* Track file close */
 SEC("tracepoint/syscalls/sys_enter_close")
-int handle_close_enter(struct trace_event_raw_sys_enter *ctx) {
+int handle_close_enter(void *ctx) {
     __u64 pid_tgid = bpf_get_current_pid_tgid();
     __u32 pid = pid_tgid >> 32;
     __u64 now = bpf_ktime_get_ns();
     
     struct dwell_key key = {
         .pid = pid,
-        .inode = 0,  // Simplified - would need fd->inode mapping
+        .inode = 0,
     };
     
     struct dwell_value *value = bpf_map_lookup_elem(&dwell_tracker, &key);
@@ -84,7 +79,6 @@ int handle_close_enter(struct trace_event_raw_sys_enter *ctx) {
     
     __u64 duration = now - value->open_time;
     
-    /* Emit event to ring buffer */
     struct dwell_event *event = bpf_ringbuf_reserve(&events, 
                                                      sizeof(*event), 0);
     if (!event) {

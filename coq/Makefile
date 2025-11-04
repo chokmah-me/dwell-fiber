@@ -9,7 +9,9 @@ VOFILES := $(VFILES:.v=.vo)
 all: $(VOFILES)
 
 %.vo: %.v
+	@echo "Compiling $<..."
 	$(COQC) $(COQFLAGS) $<
+	@echo "✓ Verified $<"
 
 clean:
 	rm -f $(VOFILES) .*.aux *.glob .*.cache
