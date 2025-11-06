@@ -4,8 +4,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
-[![Coq 8.18+](https://img.shields.io/badge/Coq-8.18%2B-blue.svg)](https://coq.inria.fr/)
+[![Coq 8.20+](https://img.shields.io/badge/Coq-8.20%2B-blue.svg)](https://coq.inria.fr/)
 [![Version: v1.3.0](https://img.shields.io/badge/Version-v1.3.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.3.0)
+[![Build: Proofs WIP](https://img.shields.io/badge/Proofs-WIP-yellow.svg)](https://github.com/dyb5784/dwell-fiber)
 
 ## ⚠️ v1.3.0 - Enforcement Live & Tested
 
@@ -19,7 +20,7 @@ sudo ./bin/dwell-fiber-daemon
 sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
 ```
 
-See **[CHANGELOG.md](CHANGELOG.md)** for v1.3.0 details.
+**Note**: Coq formal proofs are under active development (type system fixes in progress). See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## 📖 Documentation
 

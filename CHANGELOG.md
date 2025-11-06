@@ -2,6 +2,33 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### In Progress
+- **Coq Proof Compilation Fixes** ⚠️ INCOMPLETE
+  - ✅ Fixed import order (Reals before Nat)
+  - ✅ Qualified nat comparisons with `%nat` scope
+  - ✅ Replaced `Nat.ceil` with custom `nat_ceil` using ZArith
+  - ❌ **BLOCKED**: `dwell_fiber_guarantees` bundled theorem has type mismatch
+    - Conjunct 2 expects `d <= budget` after `forall k` (nested)
+    - `convergence_to_budget` has it before `exists n` (top-level)
+    - Adapter lemma approach failed: cannot apply existential theorem directly
+    - Needs `destruct` pattern or theorem restructuring
+  - **Status**: Proofs do NOT compile on Coq 8.20.1
+  - **Next Step**: Rewrite adapter with existential destructuring
+
+### Added
+- Custom `nat_ceil` helper for ceiling conversion: `Z.to_nat (up r)`
+- Proof-engineer workflow instructions in `.github/instructions/coq.instructions.md`
+
+---
+
+## [1.3.0] - 2025-11-04
+
+...existing changelog content unchanged...
+
+---
+
 ## [1.3.0] - 2025-11-04
 
 ### Added
