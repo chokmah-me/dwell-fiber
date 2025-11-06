@@ -5,21 +5,21 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 8.18+](https://img.shields.io/badge/Coq-8.18%2B-blue.svg)](https://coq.inria.fr/)
-[![Version: v0.2.0](https://img.shields.io/badge/Version-v0.2.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v0.2.0)
+[![Version: v1.3.0](https://img.shields.io/badge/Version-v1.3.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.3.0)
 
-## ⚠️ v0.2.0 - Breaking Change: Enforcement OFF by Default
+## ⚠️ v1.3.0 - Enforcement Live & Tested
 
-**This release prioritizes safety.** Enforcement is now disabled by default (observation mode).
+**This release includes full end-to-end enforcement capabilities.** Enforcement is OFF by default for safety, but can be enabled with `--enable-enforcement`.
 
 ```bash
 # Observation mode (safe default - just monitor):
 sudo ./bin/dwell-fiber-daemon
 
 # Enable enforcement if desired:
-sudo ./bin/dwell-fiber-daemon --enable-enforcement
+sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
 ```
 
-See **[CHANGELOG.md](CHANGELOG.md)** for migration guide and v0.2.0 details.
+See **[CHANGELOG.md](CHANGELOG.md)** for v1.3.0 details.
 
 ## 📖 Documentation
 
@@ -31,7 +31,7 @@ See **[CHANGELOG.md](CHANGELOG.md)** for migration guide and v0.2.0 details.
 
 ## Overview
 
-Dwell-Fiber is a formally-verified eBPF-based system that prevents ransomware by enforcing file access budgets through economic pricing mechanisms. The system includes mathematical proofs of stability written in Coq.
+Dwell-Fiber is a formally-verified eBPF-based system that prevents ransomware by enforcing economic costs on file access patterns.
 
 ### Key Innovation
 
@@ -51,6 +51,8 @@ Traditional ransomware detection relies on behavioral signatures that can be eva
 - 📈 **Observable**: Built-in Prometheus metrics and web UI
 - 👥 **User-Friendly**: Safe-by-default (observation mode), explicit `--enable-enforcement` to activate
 - 🔒 **Cross-Platform**: Platform-specific build tags for Linux/Unix
+- ⚡ **Enforcement Live**: Throttling via cgroups v2, process killing with safety checks
+- 🧪 **Tested Scenarios**: 4 workload modes including attack simulation
 
 ## Quick Links
 
@@ -60,7 +62,7 @@ Traditional ransomware detection relies on behavioral signatures that can be eva
 | **Developers** | [Architecture Docs](docs/architecture.md) — system design |
 | **Researchers** | [Stability Proofs](coq/dwell_stable.v) — formal verification |
 | **DevOps** | [Deployment Guide](docs/making-of.md) — systemd setup, monitoring |
-| **Release Notes** | [v0.2.0 Changelog](CHANGELOG.md) — bug fixes, security updates |
+| **Release Notes** | [v1.3.0 Changelog](CHANGELOG.md) — bug fixes, security updates |
 
 ## Architecture
 
@@ -114,11 +116,13 @@ The system is **proven** to satisfy (see `coq/dwell_stable.v`):
 
 ```bash
 sudo apt-get update
+sudo apt-get upgrade -y
+
 sudo apt-get install -y \
     clang llvm libbpf-dev \
     golang-go coq make git
 
-# Critical: Fix asm/types.h symlink
+# Critical: Fix Ubuntu 25.10 asm symlink
 sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
 ```
 
@@ -171,7 +175,6 @@ dwell-fiber/
 │   └── metrics.go           # HTTP metrics server
 ├── pkg/                     # Reusable packages
 ├── scripts/                 # Helper scripts
-├── docs/                    # Documentation
 ├── USER_GUIDE.md           # End-user guide ⭐ START HERE
 ├── Makefile                 # Root build system
 ├── go.mod                   # Go dependencies
@@ -198,36 +201,6 @@ price(t+1) = max(0, price(t) + α × (dwell(t) - budget))
 4. **Fast**: Converges in ~20 iterations
 
 See the [stability proof explanation](docs/stability-proof.md) for details.
-
-## Development
-
-### Build Individual Components
-
-```bash
-make bpf      # Compile eBPF program
-make coq      # Compile Coq proofs
-make daemon   # Build Go daemon
-```
-
-### Testing
-
-```bash
-# Run Go tests
-make test
-
-# Verify proofs
-make verify
-
-# Clean build artifacts
-make clean
-```
-
-### Adding New Features
-
-1. **Extend BPF monitoring**: Edit `bpf/dwell_monitor.bpf.c`
-2. **Modify ADMM algorithm**: Edit `daemon/controller.go`
-3. **Add proofs**: Edit `coq/dwell_stable.v`
-4. **Update enforcement**: Add to `pkg/enforcement/`
 
 ## Performance
 
@@ -276,7 +249,7 @@ Observed on Ubuntu 25.10 (kernel 6.17), Go 1.25, VM environment:
 
 ## Current Status
 
-**v0.2.0 Release: Security Hardening & Bug Fixes**
+**v1.3.0 Release: Enforcement Live & Tested**
 
 Implemented:
 - ✅ Real BPF monitoring (attached to sys_enter_openat/sys_enter_close) with ring-buffer events
@@ -312,7 +285,6 @@ Planned:
 - 📋 Adaptive/dynamic thresholds and anomaly detection
 - 📋 Distributed deployment guidance and hardening
 - 📋 Additional Coq proofs (liveness, fairness, attack resistance)
-
 
 ## Contributing
 
@@ -364,6 +336,6 @@ Key influences:
 ---
 
 **Status:** Active Development  
-**Latest Release:** v0.2.0 (November 6, 2025)  
+**Latest Release:** v1.3.0 (November 6, 2025)  
 **Last Updated:** November 6, 2025  
 **Maintainer:** [@dyb5784](https://github.com/dyb5784)
