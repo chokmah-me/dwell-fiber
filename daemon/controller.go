@@ -47,9 +47,10 @@ type DwellInfo struct {
 }
 
 func NewController(alpha, budget float64) *Controller {
-	// Create enforcement config
+	// Create enforcement config - default to DISABLED (observation mode)
 	enfConfig := enforcement.DefaultConfig()
-	enfConfig.Enabled = true // Start in dry-run
+	// Note: Enabled flag is set by CLI flags in main.go
+	// Default is safe: observation mode, no enforcement
 	enfConfig.ThrottleThreshold = 5 * time.Second
 	enfConfig.ThrottleCPUQuota = 20
 	enfConfig.KillThreshold = 15 * time.Second
@@ -140,7 +141,11 @@ func (c *Controller) HandleCloseEvent(pid int, cmd string, dwell time.Duration) 
 	throttled, killed := c.enforcer.GetStats()
 	c.throttledGauge.Set(float64(throttled))
 	c.killedGauge.Set(float64(killed))
-	c.enforcementMode.Set(0.0) // Dry-run mode
+	if c.enforcer.GetConfig().Enabled {
+		c.enforcementMode.Set(1.0) // Enforcement enabled
+	} else {
+		c.enforcementMode.Set(0.0) // Observation mode (safe default)
+	}
 }
 
 func (c *Controller) calculateAverageDwell() float64 {

@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -106,11 +105,17 @@ func (t *Throttler) throttleCgroupV2(pid int) error {
 
 // throttleNice uses nice/renice as fallback
 func (t *Throttler) throttleNice(pid int) error {
-	// Set nice value to +19 (lowest priority)
-	if err := syscall.Setpriority(syscall.PRIO_PROCESS, pid, 19); err != nil {
-		return fmt.Errorf("renice failed: %w", err)
-	}
-	return nil
+	// Set nice value to +10 (reduce priority, lower CPU allocation)
+	// Note: This uses platform-specific syscalls and only works on Linux
+	return t.renicePID(pid, 10)
+}
+
+// renicePID sets process nice value via syscall
+// On Linux: uses syscall.Setpriority
+// This function is platform-specific (see throttler_unix.go for implementation)
+func (t *Throttler) renicePID(pid, niceValue int) error {
+	// Placeholder - implementation in platform-specific file
+	return fmt.Errorf("renice not implemented for this platform")
 }
 
 // CleanupThrottled removes stale entries

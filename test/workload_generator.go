@@ -1,10 +1,3 @@
-cd c:\Users\danie\dwell-fiber-1
-
-# Pull the latest changes from GitHub
-git pull origin main
-
-# Now push your changes
-git push origin main
 package main
 
 import (
