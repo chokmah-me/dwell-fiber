@@ -47,7 +47,7 @@ Theorem liveness_normal_operation :
   0 <= s.(current_price) ->
   exists n : nat,
   forall (k : nat),
-  k >= n ->
+  (k >= n)%nat ->
   let updated_price := Nat.iter k (fun p => update_price p s.(current_dwell)) s.(current_price) in
   updated_price <= throttle_threshold /\ s.(throttled) = false /\ s.(killed) = false.
 Proof.
@@ -64,10 +64,10 @@ Theorem liveness_under_attack :
   s.(current_dwell) > budget ->
   0 <= s.(current_price) ->
   (exists n : nat,
-    (forall (k : nat), k >= n ->
+    (forall (k : nat), (k >= n)%nat ->
       let updated_price := Nat.iter k (fun p => update_price p s.(current_dwell)) s.(current_price) in
       updated_price >= throttle_threshold) \/
-    (forall (k : nat), k >= n ->
+    (forall (k : nat), (k >= n)%nat ->
       let updated_price := Nat.iter k (fun p => update_price p s.(current_dwell)) s.(current_price) in
       updated_price >= kill_threshold)).
 Proof.
@@ -120,7 +120,7 @@ Theorem attack_detection_bounded :
   0 <= s.(current_price) ->
   exists max_iterations : nat,
   forall (k : nat),
-  k >= max_iterations ->
+  (k >= max_iterations)%nat ->
   let updated_price := Nat.iter k (fun p => update_price p s.(current_dwell)) s.(current_price) in
   updated_price > throttle_threshold.
 Proof.

@@ -42,7 +42,7 @@ Theorem convergence_to_budget :
   0 <= p ->
   exists n : nat,
   forall (k : nat),
-  k >= n ->
+  (k >= n)%nat ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   Rabs iter_result < epsilon.
 Proof.
@@ -58,7 +58,7 @@ Theorem liveness_normal_mode :
   0 <= p ->
   exists n : nat,
   forall (k : nat),
-  k >= n ->
+  (k >= n)%nat ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   iter_result = 0 \/ iter_result < 0.001.
 Proof.
@@ -76,7 +76,7 @@ Theorem liveness_attack_mode :
   0 < threshold ->
   exists n : nat,
   forall (k : nat),
-  k >= n ->
+  (k >= n)%nat ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   iter_result >= threshold.
 Proof.
@@ -113,7 +113,7 @@ Theorem no_starvation :
   0 <= p ->
   exists n : nat,
   forall (k : nat),
-  k >= n ->
+  (k >= n)%nat ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   iter_result = 0.
 Proof.
@@ -163,12 +163,12 @@ Qed.
 Theorem dwell_fiber_guarantees :
   (forall p d, 0 <= p -> 0 <= update_price p d) /\
   (forall d p epsilon, 0 < epsilon -> 0 <= p ->
-    exists n, forall k, k >= n ->
+    exists n, forall k, (k >= n)%nat ->
     d <= budget -> 
     let iter_result := Nat.iter k (fun x => update_price x d) p in
     Rabs iter_result < epsilon) /\
   (forall d p, d > budget -> 0 < alpha ->
-    exists n, forall k, k >= n -> 
+    exists n, forall k, (k >= n)%nat -> 
     let iter_result := Nat.iter k (fun x => update_price x d) p in
     iter_result > 0) /\
   (forall p1 p2 d, p1 = p2 -> update_price p1 d = update_price p2 d) /\
