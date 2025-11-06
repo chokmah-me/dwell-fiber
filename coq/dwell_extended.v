@@ -1,6 +1,22 @@
 (* Dwell-Fiber Extended Proofs *)
 Require Import Reals.
+From Coq Require Import ZArith.
+
+(* Ceiling: up r returns smallest integer >= r *)
+Definition nat_ceil (r : R) : nat :=
+  Z.to_nat (up r).
+
+(* Custom ceiling function for nat *)
+Definition nat_ceil (r : R) : nat :=
 Require Import Lia.
+From Coq Require Import ZArith.
+
+(* Ceiling: up r returns smallest integer >= r *)
+Definition nat_ceil (r : R) : nat :=
+  Z.to_nat (up r).
+
+(* Custom ceiling function for nat *)
+Definition nat_ceil (r : R) : nat :=
 Require Import Nat.
 Open Scope R_scope.
 
@@ -43,7 +59,7 @@ Theorem liveness_normal_operation :
   updated_price <= throttle_threshold /\ s.(throttled)=false /\ s.(killed)=false.
 Proof.
   intros s Hd Hp.
-  exists (Nat.ceil ((s.(current_price) - throttle_threshold) /
+  exists (nat_ceil ((s.(current_price) - throttle_threshold) /
          (alpha * (budget - s.(current_dwell))))).
   intros k Hk; split.
   - admit.
@@ -63,7 +79,7 @@ Theorem liveness_under_attack :
         updated_price >= kill_threshold)).
 Proof.
   intros s Hd Hp.
-  exists (Nat.ceil ((throttle_threshold - s.(current_price)) /
+  exists (nat_ceil ((throttle_threshold - s.(current_price)) /
         (alpha * (s.(current_dwell) - budget)))).
   left; intros k Hk; admit.
 Qed.
@@ -109,7 +125,7 @@ Theorem attack_detection_bounded :
   updated_price > throttle_threshold.
 Proof.
   intros s Hd Hp.
-  exists (Nat.ceil (throttle_threshold / (alpha * (s.(current_dwell) - budget)))).
+  exists (nat_ceil (throttle_threshold / (alpha * (s.(current_dwell) - budget)))).
   intros k Hk; admit.
 Qed.
 
@@ -122,7 +138,7 @@ Theorem enforcement_terminates :
   final_price >= kill_threshold \/ final_price >= throttle_threshold.
 Proof.
   intros s Hd Hp.
-  exists (Nat.ceil ((kill_threshold - s.(current_price)) /
+  exists (nat_ceil ((kill_threshold - s.(current_price)) /
         (alpha * (s.(current_dwell) - budget)))).
   admit.
 Qed.
