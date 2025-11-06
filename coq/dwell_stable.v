@@ -1,6 +1,7 @@
 (* Dwell-Fiber Formal Verification - Complete Suite *)
 Require Import Reals.
 Require Import Lia.
+Require Import Nat.
 Open Scope R_scope.
 
 Parameter alpha : R.
@@ -40,7 +41,7 @@ Theorem convergence_to_budget :
   0 < epsilon ->
   0 <= p ->
   exists n : nat,
-  forall k : nat,
+  forall (k : nat),
   k >= n ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   Rabs iter_result < epsilon.
@@ -56,7 +57,7 @@ Theorem liveness_normal_mode :
   d <= budget ->
   0 <= p ->
   exists n : nat,
-  forall k : nat,
+  forall (k : nat),
   k >= n ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   iter_result = 0 \/ iter_result < 0.001.
@@ -74,7 +75,7 @@ Theorem liveness_attack_mode :
   0 <= p ->
   0 < threshold ->
   exists n : nat,
-  forall k : nat,
+  forall (k : nat),
   k >= n ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   iter_result >= threshold.
@@ -111,7 +112,7 @@ Theorem no_starvation :
   d < budget ->
   0 <= p ->
   exists n : nat,
-  forall k : nat,
+  forall (k : nat),
   k >= n ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   iter_result = 0.
