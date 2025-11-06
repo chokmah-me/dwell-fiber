@@ -35,6 +35,7 @@ Qed.
 
 Theorem convergence_to_budget :
   forall (p d : price) (epsilon : R),
+  d <= budget ->
   0 < alpha -> alpha < 2 ->
   0 < epsilon ->
   0 <= p ->
@@ -42,9 +43,9 @@ Theorem convergence_to_budget :
   forall k : nat,
   k >= n ->
   let iter_result := Nat.iter k (fun x => update_price x d) p in
-  Rabs (iter_result - budget) < epsilon.
+  Rabs iter_result < epsilon.
 Proof.
-  intros p d epsilon Halpha_pos Halpha_lt_2 Heps Hp.
+  intros p d epsilon Hd Halpha_pos Halpha_lt_2 Heps Hp.
   exists 1000.
   intros k Hk.
   admit.
@@ -164,7 +165,7 @@ Theorem dwell_fiber_guarantees :
     exists n, forall k, k >= n ->
     d <= budget -> 
     let iter_result := Nat.iter k (fun x => update_price x d) p in
-    Rabs (iter_result - budget) < epsilon) /\
+    Rabs iter_result < epsilon) /\
   (forall d p, d > budget -> 0 < alpha ->
     exists n, forall k, k >= n -> 
     let iter_result := Nat.iter k (fun x => update_price x d) p in
