@@ -1,17 +1,28 @@
 COQC := coqc
 COQFLAGS := -R . DwellFiber
 
-VFILES := dwell_stable.v
+VFILES := dwell_stable.v dwell_extended.v
 VOFILES := $(VFILES:.v=.vo)
 
-.PHONY: all clean
+.PHONY: all clean verify
 
 all: $(VOFILES)
 
-%.vo: %.v
+dwell_stable.vo: dwell_stable.v
 	@echo "Compiling $<..."
 	$(COQC) $(COQFLAGS) $<
 	@echo "✓ Verified $<"
 
+dwell_extended.vo: dwell_extended.v
+	@echo "Compiling $<..."
+	$(COQC) $(COQFLAGS) $<
+	@echo "✓ Verified $<"
+
+verify: all
+	@echo "✓ Coq proofs verified successfully"
+	@echo "  - dwell_stable.v: ADMM stability"
+	@echo "  - dwell_extended.v: Liveness, Fairness, Attack Resistance"
+
 clean:
 	rm -f $(VOFILES) .*.aux *.glob .*.cache
+	@echo "✓ Cleaned"
