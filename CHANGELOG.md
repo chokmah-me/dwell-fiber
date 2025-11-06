@@ -2,6 +2,78 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0] - 2025-11-06
+
+### Security
+- **BREAKING: Enforcement now OFF by default** (safe-by-default model)
+  - Was: Enforcement always active (risk of accidental production impact)
+  - Now: Observation mode by default, explicit `--enable-enforcement` to activate
+  - Impact: Prevents surprise throttling/killing on production systems
+  - Migration: Add `--enable-enforcement` flag to re-enable enforcement
+
+### Fixed
+- **Enforcer enabled flag hardcoded to true** (ISSUE #3)
+  - `daemon/controller.go`: Removed `enfConfig.Enabled = true` in `NewController()`
+  - Now respects CLI flags: `--enable-enforcement`, `--enable-killing`
+  - Metrics correctly report enforcement mode (0=dry-run, 1=enabled)
+
+- **Setpriority undefined syscall** (ISSUE #2)
+  - `pkg/enforcement/throttler.go`: Refactored to use platform-specific handler
+  - `pkg/enforcement/throttler_linux.go`: New file with `golang.org/x/sys/unix.Setpriority`
+  - Build tag `//go:build linux` ensures cross-platform compatibility
+  - Fallback throttling via nice adjustment works correctly
+
+- **eBPF inode tracking always 0** (ISSUE #1)
+  - `bpf/dwell_monitor.bpf.c`: Changed key from `(PID, inode)` to `(PID, FD)`
+  - File descriptor available at open/close; inode requires kernel data structure walk
+  - Now supports multiple concurrent files per PID
+  - Fixes: process opening 2+ files simultaneously report correct dwell times
+
+- **Stale BPF map entries leak memory** (ISSUE #4)
+  - Added `pid_activity` map for last-seen timestamp per PID
+  - Prevents indefinite accumulation of stale entries from crashed processes
+  - Enables future cleanup implementation (next release)
+
+- **No noise filtering** (ISSUE #5)
+  - Added 100ms minimum dwell threshold at eBPF close handler
+  - Reduces spurious events from very short-lived file opens (standard tool overhead)
+
+### Changed
+- Enforcement thresholds now OFF by default:
+  - Old: `--enable-enforcement` (soft dry-run, metrics collected, no actual throttling)
+  - New: No enforcement unless `--enable-enforcement` flag provided
+  - `enforcementMode` metric: 0 = observation, 1 = enforcement enabled
+  - CLI behavior documented in `USER_GUIDE.md`
+
+- eBPF key structure updated for better tracking:
+  - `struct dwell_key` now uses `__u32 fd` instead of `__u64 inode`
+  - Simplifies open→close correlation
+  - Reduces BPF map pressure for single-file processes
+
+### Tested
+- Ubuntu 25.10 (kernel 6.17)
+- Go 1.24.9
+- Coq 8.18+
+- clang-20 with libbpf-dev
+- CI: GitHub Actions with updated ubuntu-latest workflow
+
+### Migration Guide
+```bash
+# Old behavior (enforcement always on):
+sudo ./bin/dwell-fiber-daemon
+
+# New safe default (observation only):
+sudo ./bin/dwell-fiber-daemon
+
+# Re-enable enforcement (if needed):
+sudo ./bin/dwell-fiber-daemon --enable-enforcement
+
+# With throttling but no killing:
+sudo ./bin/dwell-fiber-daemon --enable-enforcement --budget=5.0
+```
+
+---
+
 ## [1.3.0] - 2025-11-04
 
 ### Added

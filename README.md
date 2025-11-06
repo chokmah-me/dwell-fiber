@@ -5,6 +5,21 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 8.18+](https://img.shields.io/badge/Coq-8.18%2B-blue.svg)](https://coq.inria.fr/)
+[![Version: v0.2.0](https://img.shields.io/badge/Version-v0.2.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v0.2.0)
+
+## ⚠️ v0.2.0 - Breaking Change: Enforcement OFF by Default
+
+**This release prioritizes safety.** Enforcement is now disabled by default (observation mode).
+
+```bash
+# Observation mode (safe default - just monitor):
+sudo ./bin/dwell-fiber-daemon
+
+# Enable enforcement if desired:
+sudo ./bin/dwell-fiber-daemon --enable-enforcement
+```
+
+See **[CHANGELOG.md](CHANGELOG.md)** for migration guide and v0.2.0 details.
 
 ## 📖 Documentation
 
@@ -34,7 +49,8 @@ Traditional ransomware detection relies on behavioral signatures that can be eva
 - ✅ **Formally Verified**: Coq proofs guarantee system stability
 - 🚀 **Low Overhead**: Sub-millisecond latency impact
 - 📈 **Observable**: Built-in Prometheus metrics and web UI
-- 👥 **User-Friendly**: Safe-by-default (observation mode), no enforcement until explicitly enabled
+- 👥 **User-Friendly**: Safe-by-default (observation mode), explicit `--enable-enforcement` to activate
+- 🔒 **Cross-Platform**: Platform-specific build tags for Linux/Unix
 
 ## Quick Links
 
@@ -44,6 +60,7 @@ Traditional ransomware detection relies on behavioral signatures that can be eva
 | **Developers** | [Architecture Docs](docs/architecture.md) — system design |
 | **Researchers** | [Stability Proofs](coq/dwell_stable.v) — formal verification |
 | **DevOps** | [Deployment Guide](docs/making-of.md) — systemd setup, monitoring |
+| **Release Notes** | [v0.2.0 Changelog](CHANGELOG.md) — bug fixes, security updates |
 
 ## Architecture
 
@@ -259,9 +276,16 @@ Observed on Ubuntu 25.10 (kernel 6.17), Go 1.25, VM environment:
 
 ## Current Status
 
+**v0.2.0 Release: Security Hardening & Bug Fixes**
+
 Implemented:
 - ✅ Real BPF monitoring (attached to sys_enter_openat/sys_enter_close) with ring-buffer events
-- ✅ Enforcement engine live:
+- ✅ eBPF inode/FD tracking fixed (ISSUE #1) — now supports multiple files per PID
+- ✅ Enforcement OFF by default (safe-by-default model) — explicit `--enable-enforcement` required
+- ✅ Platform-specific Unix imports (ISSUE #2) — proper cross-platform support
+- ✅ Stale BPF map cleanup (ISSUE #4) — prevents memory leaks from crashed processes
+- ✅ 100ms noise filter at eBPF close handler (ISSUE #5)
+- ✅ Enforcement engine (opt-in):
   - Throttling via cgroups v2 (default 20% CPU quota)
   - Killing on critical dwell (default 15s+), graceful SIGTERM then SIGKILL
 - ✅ Safety controls: protected process list (systemd, init, sshd, NetworkManager, gdm, Xorg, wayland) and self-protection
@@ -275,17 +299,19 @@ Implemented:
   - Mode 3: Attack simulation (7s/10s throttled, 15s killed)
 - ✅ Coq proofs compile (stability)
 - ✅ End-user guide with setup/usage/troubleshooting
+- ✅ Updated CI/CD for Ubuntu 25.10 + Go 1.24
 
 In Progress:
 - 🚧 Mid‑dwell enforcement (act before file close)
 - 🚧 Performance profiling (BPF overhead, ring-buffer drop rate, controller CPU/mem)
 - 🚧 Systemd service packaging and runbook
-- 🚧 CI/integration tests
+- 🚧 CI/integration tests (GitHub Actions E2E)
 
 Planned:
 - 📋 Threshold and policy tuning via CLI/config (per‑user/per‑cmd policies)
 - 📋 Adaptive/dynamic thresholds and anomaly detection
 - 📋 Distributed deployment guidance and hardening
+- 📋 Additional Coq proofs (liveness, fairness, attack resistance)
 
 
 ## Contributing
@@ -338,5 +364,6 @@ Key influences:
 ---
 
 **Status:** Active Development  
-**Last Updated:** November 4, 2025  
+**Latest Release:** v0.2.0 (November 6, 2025)  
+**Last Updated:** November 6, 2025  
 **Maintainer:** [@dyb5784](https://github.com/dyb5784)
