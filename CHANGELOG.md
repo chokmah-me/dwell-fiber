@@ -25,12 +25,6 @@ All notable changes to this project are documented in this file.
 
 ## [1.3.0] - 2025-11-04
 
-...existing changelog content unchanged...
-
----
-
-## [1.3.0] - 2025-11-04
-
 ### Added
 - **End-to-End Enforcement System**
   - Throttling via cgroups v2 CPU limits (configurable quota, default 20%)

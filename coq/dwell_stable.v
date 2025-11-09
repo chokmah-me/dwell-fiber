@@ -1,9 +1,10 @@
 (* Dwell-Fiber Formal Verification - Complete Suite *)
+Require Import Reals.
 From Coq Require Import ZArith.
 
 Definition nat_ceil (r : R) : nat :=
   Z.to_nat (up r).
-Require Import Reals.
+
 Require Import Lia.
 Require Import Nat.
 Open Scope R_scope.
@@ -111,7 +112,7 @@ Theorem no_starvation :
   iter_result = 0.
 Proof.
   intros d p Hd Hp.
-  exists 10000.
+  exists 10000%nat.
   intros k Hk; admit.
 Admitted. (* TODO: Complete proof *)
 
@@ -144,8 +145,11 @@ Proof. intros; trivial. Qed.
 
 Theorem dwell_fiber_guarantees :
   (forall p d, 0 <= p -> 0 <= update_price p d) /\
-  (forall d p epsilon, 0 < epsilon -> 0 <= p ->
-    exists n, forall k, (k >= n)%nat -> d <= budget ->
+  (forall p d epsilon, 
+    d <= budget ->
+    0 < epsilon -> 
+    0 <= p ->
+    exists n, forall k, (k >= n)%nat ->
     let iter_result := Nat.iter k (fun x => update_price x d) p in
     Rabs iter_result < epsilon) /\
   (forall d p, d > budget -> 0 < alpha ->
@@ -164,6 +168,6 @@ Proof.
   - exact liveness_attack_mode.
   - exact fairness_identical_processes.
   - exact ransomware_detection.
-Admitted. (* TODO: Complete proof *)
+Qed.
 
 Close Scope R_scope.
