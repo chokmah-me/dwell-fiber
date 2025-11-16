@@ -30,6 +30,45 @@ sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
 
 ---
 
+# Dwell-Fiber V3: Adaptive I/O Pricing Ransomware Defense
+
+Dwell-Fiber is a formally-verified eBPF-based ransomware defense system that enforces economic costs on suspicious file access patterns using Weighted I/O Pressure (WIP) pricing and ADMM optimization with proven stability guarantees.
+
+## Core Innovation: WIP Metric
+
+V3 tracks two I/O rate signals per process over a 1-second window:
+- **TBW** (Total Bytes Written): MB/s
+- **UFM** (Unique Files Modified): Files/s
+
+Weighted I/O Pressure:
+```
+WIP(t) = ω₁·TBW(t) + ω₂·UFM(t)
+```
+
+Tier assignment via Trust Classification Module (TCM):
+
+| Tier | Profile         | ω₁  | ω₂  | Budget | Detection Criteria |
+|------|----------------|-----|-----|--------|-------------------|
+| T1   | Backups        | 0.9 | 0.1 | 12000  | TBW ≥ 10k MB/s OR UFM ≤ 1k |
+| T1.5 | Dev Builds     |0.55 |0.45 | 8000   | UFM ≥ 20k & TBW ≥ 500 |
+| T2   | Untrusted      |0.3  |0.7  | 4000   | TBW < 10 & UFM ≥ 1k |
+
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
+
+## Build & Run
+
+```bash
+sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
+make bpf
+make verify
+make daemon
+sudo ./bin/dwell-fiber
+```
+
+Metrics: http://localhost:9090
+
 ## Overview
 
 Dwell-Fiber is a formally-verified eBPF-based system that prevents ransomware by enforcing economic costs on file access patterns.
@@ -64,42 +103,6 @@ Traditional ransomware detection relies on behavioral signatures that can be eva
 | **Researchers** | [Stability Proofs](coq/dwell_stable.v) — formal verification |
 | **DevOps** | [Deployment Guide](docs/making-of.md) — systemd setup, monitoring |
 | **Release Notes** | [v1.3.0 Changelog](CHANGELOG.md) — bug fixes, security updates |
-
-## Architecture
-
-```
-┌─────────────────────────────────────────┐
-│         Kernel Space (eBPF)             │
-│  ┌───────────────────────────────────┐  │
-│  │  dwell_monitor.bpf.o              │  │
-│  │  • Track sys_openat               │  │
-│  │  • Track sys_close                │  │
-│  │  • Measure dwell time             │  │
-│  │  • Emit events to ring buffer     │  │
-│  └───────────────────────────────────┘  │
-└──────────────┬──────────────────────────┘
-               │ Ring Buffer Events
-               ▼
-┌─────────────────────────────────────────┐
-│        User Space (Go Daemon)           │
-│  ┌───────────────────────────────────┐  │
-│  │  ADMM Controller                  │  │
-│  │  price(t+1) = max(0,              │  │
-│  │    price(t) + α×(dwell - budget)) │  │
-│  │                                   │  │
-│  │  • α = 0.5 (step size)            │  │
-│  │  • budget = 5 seconds             │  │
-│  └───────────────────────────────────┘  │
-│                                         │
-│  ┌───────────────────────────────────┐  │
-│  │  Enforcement Engine               │  │
-│  │  • Throttle high-price processes  │  │
-│  │  • Kill if price critical         │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-            │
-            ▼ Proven Stable (Coq)
-```
 
 ## Mathematical Guarantees
 

@@ -65,3 +65,17 @@ make clean coq  # ❌ FAILS at dwell_stable.v line 76
 ---
 
 *Session paused - proofs do NOT compile. Resume with destruct pattern for adapter lemma.*
+
+---
+
+## V3 Commit/Tag/Push Instructions
+
+After updating all files for V3:
+
+```powershell
+git add .
+git commit -m "feat: Dwell-Fiber V3 – WIP metric, TCM, discrete ADMM, Coq proofs, docs"
+git tag -a v3.0.0 -m "Dwell-Fiber V3.0.0: Adaptive I/O Pricing, formal stability"
+git push origin main
+git push origin --tags
+```

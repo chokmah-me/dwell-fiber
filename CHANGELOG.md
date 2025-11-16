@@ -23,6 +23,35 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [3.0.0] – 2024-11-XX
+
+### Added
+- Weighted I/O Pressure (WIP) metric: TBW + UFM
+- Trust Classification Module (TCM) tiers
+- Discrete-time ADMM controller
+- eBPF kprobe/vfs_write windowed aggregation
+- Formal Coq proofs for stability
+- Documentation: ARCHITECTURE.md, V3_MIGRATION.md, FORMAL_VERIFICATION.md
+
+### Changed
+- daemon/dwell_user.go: handles io_event (TBW/UFM)
+- bpf/dwell_monitor.bpf.c: switched hooks
+- Metrics: dwell_wip_current, dwell_price, dwell_tier_switches
+
+### Removed
+- Old dwell-time logic, open/close hooks
+
+### Security
+- Defeats intermittent-access ransomware
+
+### Performance
+- eBPF overhead <5%, ringbuf latency <1ms
+
+### Testing
+- Unit, formal, integration, E2E
+
+---
+
 ## [1.3.0] - 2025-11-04
 
 ### Added
