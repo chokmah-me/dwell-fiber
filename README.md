@@ -82,7 +82,14 @@ Metrics: http://localhost:9090
 
 ## Status
 
-V3 implementation complete; formal verification proofs have type unification issues and are not yet verified (see DEV-NOTES.md).
+- V2 (dwell-time) is production-ready and operational.
+- V3 (WIP / Weighted I/O Pressure) components are drafted, integration pending.
+- Formal Coq proofs currently have type/unification issues and are not yet verified.
+- Recommended workflow: run V2 in observation mode, evaluate V3 in a feature branch / simulation first.
+
+# Quick guidance
+- To run stable production (V2): use `make bpf && make daemon` and run daemon without `--v3`.
+- To experiment with V3: create feature branch, enable `--v3 --simulate` and follow V3_QUICKSTART.md.
 
 ## License
 
