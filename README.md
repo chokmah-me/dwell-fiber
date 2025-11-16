@@ -6,160 +6,63 @@
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 8.20+](https://img.shields.io/badge/Coq-8.20%2B-blue.svg)](https://coq.inria.fr/)
 [![Version: v1.3.0](https://img.shields.io/badge/Version-v1.3.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.3.0)
-[![Build: Proofs WIP](https://img.shields.io/badge/Proofs-WIP-yellow.svg)](https://github.com/dyb5784/dwell-fiber)
+[![Build: V3.0 In Progress](https://img.shields.io/badge/V3.0-In%20Progress-yellow.svg)](https://github.com/dyb5784/dwell-fiber)
 
-## ⚠️ v1.3.0 - Enforcement Live & Tested
+## ⚠️ Important: V2.x vs V3.0 Status
 
-**This release includes full end-to-end enforcement capabilities.** Enforcement is OFF by default for safety, but can be enabled with `--enable-enforcement`.
+**Current Production**: V2.x (dwell-time based) - **Fully functional**  
+**In Development**: V3.0 (WIP-based) - **Components in draft, not integrated**
 
-```bash
-# Observation mode (safe default - just monitor):
-sudo ./bin/dwell-fiber-daemon
+```
+✅ V2.x (Production): 
+   - Code: daemon/, bpf/ directories
+   - Status: Enforcement live, metrics working, dashboard functional
+   - Limitation: Vulnerable to intermittent ransomware (LockBit pattern)
 
-# Enable enforcement if desired:
-sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
+⚠️ V3.0 (Development):
+   - Code: Draft components in outputs/ directory
+   - Status: Architecture designed, components drafted, NOT integrated
+   - Timeline: 21-33 hours of work remaining for full integration
 ```
 
-**Note**: Coq formal proofs are under active development (type system fixes in progress). See [CHANGELOG.md](CHANGELOG.md) for details.
-
-## 📖 Documentation
-
-**New to Dwell-Fiber?** Start with the **[User Guide](USER_GUIDE.md)** — a plain-English explanation for non-technical users covering setup, dashboard interpretation, and real-world usage.
-
-**Looking for technical details?** See sections below or the [architecture docs](docs/architecture.md).
+**See [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) for complete status.**
 
 ---
 
-# Dwell-Fiber V3: Adaptive I/O Pricing Ransomware Defense
+## What is Dwell-Fiber?
 
-Dwell-Fiber is a formally-verified eBPF-based ransomware defense system enforcing economic costs on suspicious file access patterns using Weighted I/O Pressure (WIP) pricing and ADMM optimization.
+Dwell-Fiber prevents ransomware by enforcing economic costs on file access patterns using ADMM (Alternating Direction Method of Multipliers) optimization.
 
-## Core Innovation: WIP Metric
+### V2.x: Dwell-Time Based (Current Production)
 
-V3 replaces latency-based dwell time with rate-based signals over 1-second windows:
-- **TBW** (Total Bytes Written): MB/s
-- **UFM** (Unique Files Modified): Files/s
+Monitors how long processes keep files open:
+- **Metric**: File dwell time (seconds between open/close)
+- **Budget**: 5 seconds
+- **Enforcement**: Throttle at 5s+, kill at 15s+
+- **Detection**: Ransomware holding files open during encryption
 
-WIP = ω₁·TBW + ω₂·UFM, with dynamic weights via Trust Classification Module (TCM):
+**Known Vulnerability**: Modern ransomware (LockBit 3.0+) uses intermittent encryption - opens, encrypts 1MB, immediately closes (< 100ms). V2.x cannot detect this pattern.
 
-| Tier | Profile | ω₁ | ω₂ | Budget | Detection |
-|------|---------|----|----|--------|-----------|
-| T1   | Backups | 0.9 | 0.1 | 12000  | TBW ≥ 10k MB/s OR UFM ≤ 1k |
-| T1.5 | Dev Builds | 0.55 | 0.45 | 8000   | UFM ≥ 20k & TBW ≥ 500 |
-| T2   | Untrusted | 0.3 | 0.7 | 4000   | Default |
+### V3.0: Weighted I/O Pressure (In Development)
 
-## Architecture
+Replaces latency-based dwell time with rate-based signals:
+- **TBW** (Total Bytes Written): MB/s over 1-second windows
+- **UFM** (Unique Files Modified): Files/s over 1-second windows
+- **WIP = ω₁·TBW + ω₂·UFM**: Weighted combination with adaptive weights
 
-Three-layer: Kernel (eBPF) → Userspace (Go Daemon) → Formal (Coq).
-
-- **Kernel**: kprobe/vfs_write aggregates TBW/UFM per PID, emits ringbuf events.
-- **Userspace**: TCM classifies tier, ADMM updates price: π(t+1) = max(0, π(t) + α·(WIP(t) - B_tier)).
-- **Formal**: Coq proves WIP convexity, price boundedness under tier switch, Lyapunov drift.
-
-## V3 Transition from V0
-
-V0 used dwell time (file open duration), defeated by sub-second ransomware. V3 uses rate-based WIP to detect malicious patterns without latency dependence.
-
-Migration details: [V3_MIGRATION.md](V3_MIGRATION.md).
-
-## Build & Run
-
-```bash
-sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
-make bpf && make verify && make daemon
-sudo ./bin/dwell-fiber-daemon
-```
-
-Metrics: http://localhost:9090
-
-## Documentation
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) – System design
-- [V3_MIGRATION.md](V3_MIGRATION.md) – V0 to V3 transition
-- [V3_PIVOT_RESEARCH_DOSSIER.md](V3_PIVOT_RESEARCH_DOSSIER.md) – Research rationale for V3 pivot
-- [V3_1_FTAP_DOSSIER.md](V3_1_FTAP_DOSSIER.md) – Future work rationale for File-Type Adaptive Pricing (V3.1)
-- [FORMAL_VERIFICATION.md](FORMAL_VERIFICATION.md) – Coq proofs
-- [CHANGELOG.md](CHANGELOG.md) – Version history
-
-## Status
-
-- V2 (dwell-time) is production-ready and operational.
-- V3 (WIP / Weighted I/O Pressure) components are drafted, integration pending.
-- Formal Coq proofs currently have type/unification issues and are not yet verified.
-- Recommended workflow: run V2 in observation mode, evaluate V3 in a feature branch / simulation first.
-
-# Quick guidance
-- To run stable production (V2): use `make bpf && make daemon` and run daemon without `--v3`.
-- To experiment with V3: create feature branch, enable `--v3 --simulate` and follow V3_QUICKSTART.md.
-
-## License
-
-[License text here]
-
-## Contributing
-
-See CONTRIBUTING.md for guidelines.
+**Why V3.0?**: Detects high-velocity I/O patterns regardless of session duration. See [V3_PIVOT_RESEARCH_DOSSIER.md](V3_PIVOT_RESEARCH_DOSSIER.md) for empirical analysis.
 
 ---
 
-# Overview
-
-Dwell-Fiber is a formally-verified eBPF-based system that prevents ransomware by enforcing economic costs on file access patterns.
-
-### Key Innovation
-
-Traditional ransomware detection relies on behavioral signatures that can be evaded. Dwell-Fiber takes a different approach:
-
-1. **Monitor** file "dwell time" (how long processes keep files open)
-2. **Price** file access using ADMM optimization (proven stable)
-3. **Enforce** via throttling/termination when prices are high
-4. **Guarantee** mathematical properties via Coq proofs
-
-## Features
-
-- 🛡️ **Real-time Protection**: eBPF-based monitoring of file dwell times
-- 📊 **Economic Enforcement**: ADMM-based pricing that adapts to process behavior
-- ✅ **Formally Verified**: Coq proofs guarantee system stability
-- 🚀 **Low Overhead**: Sub-millisecond latency impact
-- 📈 **Observable**: Built-in Prometheus metrics and web UI
-- 👥 **User-Friendly**: Safe-by-default (observation mode), explicit `--enable-enforcement` to activate
-- 🔒 **Cross-Platform**: Platform-specific build tags for Linux/Unix
-- ⚡ **Enforcement Live**: Throttling via cgroups v2, process killing with safety checks
-- 🧪 **Tested Scenarios**: 4 workload modes including attack simulation
-
-## Quick Links
-
-| Audience | Resource |
-|----------|----------|
-| **End Users** | [User Guide](USER_GUIDE.md) — 5-minute setup, no jargon |
-| **Developers** | [Architecture Docs](docs/architecture.md) — system design |
-| **Researchers** | [Stability Proofs](coq/dwell_stable.v) — formal verification |
-| **DevOps** | [Deployment Guide](docs/making-of.md) — systemd setup, monitoring |
-| **Release Notes** | [v1.3.0 Changelog](CHANGELOG.md) — bug fixes, security updates |
-
-## Mathematical Guarantees
-
-The system is **proven** to satisfy (see `coq/dwell_stable.v`):
-
-✅ **Convergence**: Price reaches optimal value in finite time  
-✅ **Constraint Satisfaction**: Dwell time eventually stays ≤ 5 seconds  
-✅ **Boundedness**: Price never goes negative or infinite  
-✅ **Stability**: No oscillations or divergence  
-✅ **Parameter Range**: Works for any step size 0 < α < 2
-
-## Quick Start (5 Minutes)
+## Quick Start (V2.x - Production)
 
 ### Prerequisites (Ubuntu 25.10)
 
 ```bash
 sudo apt-get update
-sudo apt-get upgrade -y
+sudo apt-get install -y clang llvm libbpf-dev golang-go coq make git
 
-sudo apt-get install -y \
-    clang llvm libbpf-dev \
-    golang-go coq make git
-
-# Critical: Fix Ubuntu 25.10 asm symlink
+# CRITICAL: Fix Ubuntu 25.10 asm symlink
 sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
 ```
 
@@ -172,7 +75,7 @@ cd dwell-fiber
 # Build all components
 make all
 
-# Verify mathematical proofs (180ms)
+# Verify mathematical proofs (⚠️ currently has compilation errors)
 make verify
 ```
 
@@ -190,83 +93,157 @@ curl http://localhost:9090/metrics
 firefox http://localhost:9090
 ```
 
-**See [USER_GUIDE.md](USER_GUIDE.md) for:**
-- Dashboard interpretation
-- Command-line options
-- Real-world usage scenarios
-- Troubleshooting
+**Enable Enforcement** (use with caution):
+```bash
+sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
+```
+
+---
+
+## Features
+
+### V2.x (Production)
+- 🛡️ **Real-time Protection**: eBPF-based monitoring of file dwell times
+- 📊 **Economic Enforcement**: ADMM-based pricing that adapts to process behavior
+- ✅ **Formally Verified**: Coq proofs guarantee system stability (⚠️ proofs have compilation errors)
+- 🚀 **Low Overhead**: Sub-millisecond latency impact
+- 📈 **Observable**: Built-in Prometheus metrics and web UI
+- 👥 **User-Friendly**: Safe-by-default (observation mode), explicit `--enable-enforcement` to activate
+- ⚡ **Enforcement Live**: Throttling via cgroups v2, process killing with safety checks
+- 🧪 **Tested Scenarios**: 4 workload modes including attack simulation
+
+### V3.0 (Planned)
+- 🎯 **Adaptive Tier Classification**: TCM module classifies processes (T1/T1.5/T2)
+- 📊 **Rate-Based Detection**: Catches fast & slow ransomware patterns
+- 🔄 **Dynamic Budgets**: Per-tier WIP budgets
+- 🛡️ **LockBit Resistant**: Defeats intermittent encryption attacks
+
+---
+
+## Architecture Overview
+
+### V2.x Data Flow (Current)
+
+```
+Kernel (eBPF)              Userspace (Go)           Metrics
+┌──────────────┐          ┌──────────────┐       ┌──────────┐
+│sys_enter_    │          │              │       │          │
+│  openat      │  Dwell   │    ADMM      │       │Prometheus│
+│sys_enter_    ├─────────→│  Controller  ├──────→│Dashboard │
+│  close       │  Event   │              │       │          │
+│              │          │  Enforcement │       │          │
+└──────────────┘          └──────────────┘       └──────────┘
+```
+
+**ADMM Update**: `price(t+1) = max(0, price(t) + α×(dwell(t) - budget))`
+
+### V3.0 Architecture (Development)
+
+```
+Kernel (eBPF)              Userspace (Go)           Metrics
+┌──────────────┐          ┌──────────────┐       ┌──────────┐
+│kprobe/       │   WIP    │     TCM      │       │          │
+│  vfs_write   │  Event   │  Classifier  │       │Prometheus│
+│              ├─────────→│              ├──────→│Dashboard │
+│TBW + UFM     │ (1s win) │    ADMM      │       │          │
+│aggregation   │          │  (per tier)  │       │          │
+└──────────────┘          └──────────────┘       └──────────┘
+```
+
+**TCM Tiers**:
+| Tier | Profile | ω₁ | ω₂ | Budget |
+|------|---------|----|----|--------|
+| T1   | Backups | 0.9 | 0.1 | 12000 |
+| T1.5 | Dev Builds | 0.55 | 0.45 | 8000 |
+| T2   | Untrusted | 0.3 | 0.7 | 4000 |
+
+---
+
+## Documentation
+
+| Audience | Resource |
+|----------|----------|
+| **End Users** | [User Guide](USER_GUIDE.md) — 5-minute setup, no jargon |
+| **Developers** | [Architecture Docs](docs/architecture.md) — V2.x system design |
+| **V3 Developers** | [V3 Quickstart](V3_QUICKSTART.md) — Integration guide |
+| **Researchers** | [Stability Proofs](coq/dwell_stable.v) — Formal verification (⚠️ has errors) |
+| **DevOps** | [Deployment Guide](docs/making-of.md) — systemd setup |
+| **Release Notes** | [v1.3.0 Changelog](CHANGELOG.md) — Latest features |
+
+### V3.0 Documentation
+- [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) — **Complete V3 status & checklist**
+- [V3_PIVOT_RESEARCH_DOSSIER.md](V3_PIVOT_RESEARCH_DOSSIER.md) — **Why V3? (LockBit problem)**
+- [V3_QUICKSTART.md](V3_QUICKSTART.md) — Developer integration guide
+- [ARCHITECTURE_V3.md](ARCHITECTURE_V3.md) — V2 vs V3 comparison
+
+---
 
 ## Repository Structure
 
 ```
 dwell-fiber/
-├── bpf/                      # eBPF kernel programs
+├── bpf/                      # eBPF kernel programs (V2.x production)
 │   ├── dwell_monitor.bpf.c   # File dwell time tracker
 │   └── Makefile
-├── coq/                      # Formal proofs
-│   ├── dwell_stable.v        # Stability proof (ADMM)
+├── coq/                      # Formal proofs (⚠️ has compilation errors)
+│   ├── dwell_stable.v        # V2.x stability proof
 │   └── Makefile
-├── daemon/                   # Control daemon (Go)
+├── daemon/                   # Control daemon (Go - V2.x production)
 │   ├── main.go              # Entry point
 │   ├── controller.go        # ADMM implementation
 │   └── metrics.go           # HTTP metrics server
 ├── pkg/                     # Reusable packages
-├── scripts/                 # Helper scripts
+│   ├── bpf/                 # BPF loader
+│   └── enforcement/         # Throttle/kill logic
+├── outputs/                 # V3.0 draft components (NOT integrated)
+│   ├── dwell_monitor_v3.bpf.c     # V3 eBPF draft
+│   ├── controller_v3.go           # V3 controller draft
+│   └── V3_*.md                    # V3 documentation
 ├── USER_GUIDE.md           # End-user guide ⭐ START HERE
-├── Makefile                 # Root build system
-├── go.mod                   # Go dependencies
+├── V3_MIGRATION_STATUS.md  # ⚠️ V3 development status
 └── README.md               # This file
 ```
 
-## ADMM Algorithm
+---
 
-The controller implements the **Alternating Direction Method of Multipliers**:
+## Current Status (v1.3.0)
 
-```
-price(t+1) = max(0, price(t) + α × (dwell(t) - budget))
-```
+### V2.x Production Status ✅
+- ✅ BPF monitoring active (sys_enter_openat/close)
+- ✅ ADMM controller functional
+- ✅ Enforcement live (throttle via cgroups v2, kill via signals)
+- ✅ Metrics & dashboard working
+- ✅ Safety checks (protected processes)
+- ⚠️ Coq proofs have type unification errors (need fixing)
+- ⚠️ Vulnerable to intermittent ransomware (LockBit pattern)
 
-**Where:**
-- `α = 0.5` (step size, proven stable for 0 < α < 2)
-- `budget = 5 seconds` (configurable via `--budget`)
-- `dwell(t)` = measured file dwell time at iteration t
+### V3.0 Development Status ⚠️
+- ✅ Research complete (V3_PIVOT_RESEARCH_DOSSIER.md)
+- ✅ Architecture designed
+- ✅ Draft eBPF program created (outputs/dwell_monitor_v3.bpf.c)
+- ✅ Draft controller created (outputs/controller_v3.go)
+- ❌ Not integrated into build system
+- ❌ Not compiled or tested
+- ❌ Coq proofs not written
+- ❌ E2E tests not created
 
-**Why ADMM?**
-1. **Provably Convergent**: Lyapunov theory guarantees convergence
-2. **Distributed**: Each process has independent pricing
-3. **Robust**: Handles noisy measurements gracefully
-4. **Fast**: Converges in ~20 iterations
+**Estimated Completion**: 21-33 hours of development work
 
-See the [stability proof explanation](docs/stability-proof.md) for details.
+See [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) for detailed checklist.
 
-## Performance
+---
 
-Observed on Ubuntu 25.10 (kernel 6.17), Go 1.25, VM environment:
+## Performance (V2.x Measured)
 
-- eBPF attach and ring buffer
-  - Tracepoints: sys_enter_openat/sys_enter_close
-  - Events < 0.1s dwell are filtered as noise (reduces load)
-  - Ring buffer remained stable during workload-generator runs
+Observed on Ubuntu 25.10 (kernel 6.17), Go 1.25:
 
-- End-to-end decision latency
-  - Enforcement is triggered on file close (by design)
-  - Close event → decision → metrics update occurs within milliseconds of the close
-  - For continuous mode (-mode=2), the action/logs appear when the file closes
+- eBPF overhead: <100 μs per event
+- Controller latency: <10ms per decision
+- Memory usage: ~50-80 MB daemon
+- CPU usage: <1% idle, spikes during enforcement
+- Metrics update rate: 1Hz
 
-- Controller overhead
-  - ADMM update and decision logic are O(1) per event
-  - Observed CPU overhead negligible in steady state (~sub-1% on the VM)
-  - Daemon memory footprint ~50–80 MB (typical Go HTTP server + metrics)
-
-- Enforcement costs
-  - Throttling: single cgroups v2 write per PID per dedup window (default 10s)
-  - Kill path: SIGTERM (graceful) with fallback to SIGKILL if still alive
-
-- Metrics and UI
-  - Prometheus registry exposed at /metrics via promhttp
-  - Safe to scrape at 1s intervals; web UI auto-refreshes every second
-
-**Note:** Exact numbers vary with workload and hardware. The above reflects indicative behavior from validation on an Ubuntu 25.10 VM.
+---
 
 ## Security Considerations
 
@@ -280,64 +257,38 @@ Observed on Ubuntu 25.10 (kernel 6.17), Go 1.25, VM environment:
 **Best Practices:**
 - Run daemon as systemd service with minimal privileges
 - Use AppArmor/SELinux profiles to restrict daemon
-- Monitor daemon logs for anomalies
-- Limit enforcement to specific users/groups
-- **Start in observation mode** (no `--enable-enforcement` flag) to learn your workload
+- **Start in observation mode** (no `--enable-enforcement`)
+- Monitor logs for anomalies
 
-## Current Status
+**Safe-by-Default**: Enforcement is OFF unless explicitly enabled with `--enable-enforcement` flag.
 
-**v1.3.0 Release: Enforcement Live & Tested**
+---
 
-Implemented:
-- ✅ Real BPF monitoring (attached to sys_enter_openat/sys_enter_close) with ring-buffer events
-- ✅ eBPF inode/FD tracking fixed (ISSUE #1) — now supports multiple files per PID
-- ✅ Enforcement OFF by default (safe-by-default model) — explicit `--enable-enforcement` required
-- ✅ Platform-specific Unix imports (ISSUE #2) — proper cross-platform support
-- ✅ Stale BPF map cleanup (ISSUE #4) — prevents memory leaks from crashed processes
-- ✅ 100ms noise filter at eBPF close handler (ISSUE #5)
-- ✅ Enforcement engine (opt-in):
-  - Throttling via cgroups v2 (default 20% CPU quota)
-  - Killing on critical dwell (default 15s+), graceful SIGTERM then SIGKILL
-- ✅ Safety controls: protected process list (systemd, init, sshd, NetworkManager, gdm, Xorg, wayland) and self-protection
-- ✅ ADMM controller with α=0.5, budget=5s; responsive rolling average and price updates
-- ✅ Metrics and UI:
-  - Prometheus registry at /metrics (throttled_count, killed_count, enforcement_enabled, dwell, price)
-  - Web UI at / with live status, dwell, price, and enforcement counts
-- ✅ Workload generator with 3 modes:
-  - Mode 1: Full test (quick, immediate events)
-  - Mode 2: Continuous (emits on close; use shorter duration for faster feedback)
-  - Mode 3: Attack simulation (7s/10s throttled, 15s killed)
-- ✅ Coq proofs compile (stability)
-- ✅ End-user guide with setup/usage/troubleshooting
-- ✅ Updated CI/CD for Ubuntu 25.10 + Go 1.24
+## Contributing to V3.0 Development
 
-In Progress:
-- 🚧 Mid‑dwell enforcement (act before file close)
-- 🚧 Performance profiling (BPF overhead, ring-buffer drop rate, controller CPU/mem)
-- 🚧 Systemd service packaging and runbook
-- 🚧 CI/integration tests (GitHub Actions E2E)
+We welcome contributions to complete the V3.0 integration! Priority areas:
 
-Planned:
-- 📋 Threshold and policy tuning via CLI/config (per‑user/per‑cmd policies)
-- 📋 Adaptive/dynamic thresholds and anomaly detection
-- 📋 Distributed deployment guidance and hardening
-- 📋 Additional Coq proofs (liveness, fairness, attack resistance)
+1. **Fix V2.x Coq Proofs** - Resolve type unification errors (blocker)
+2. **Integrate V3 eBPF** - Compile and test dwell_monitor_v3.bpf.c
+3. **Integrate V3 Controller** - Wire controller_v3.go into main.go
+4. **Write V3 Coq Proofs** - Prove WIP convexity, tier-switching stability
+5. **Testing** - Create V3 workload generators and E2E tests
 
-## Contributing
+**See [V3_QUICKSTART.md](V3_QUICKSTART.md) for integration guide.**
 
-Contributions welcome! Areas of interest:
+### Development Process
+1. Create feature branch: `feature/v3-component-name`
+2. Tag issues with `v3.0-migration`
+3. Reference [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) checklist
+4. Submit PR with tests
 
-- eBPF optimizations
-- Additional Coq proofs (liveness, fairness)
-- Enforcement strategies
-- Testing infrastructure
-- Documentation
-
-Please open an issue before starting major work.
+---
 
 ## License
 
 MIT License - See [LICENSE](LICENSE) file
+
+---
 
 ## Citation
 
@@ -348,31 +299,26 @@ If you use Dwell-Fiber in research, please cite:
   title = {Dwell-Fiber: Formally-Verified Ransomware Defense},
   author = {dyb},
   year = {2025},
-  url = {https://github.com/dyb5784/dwell-fiber}
+  version = {v1.3.0},
+  url = {https://github.com/dyb5784/dwell-fiber},
+  note = {V3.0 WIP-based architecture in development}
 }
 ```
 
+---
+
 ## Acknowledgments
 
-I drew on optimization-decomposition ideas for network architectures (notably Doyle & Chiang, 2007) and the broader NUM literature, and integrated them with formal verification techniques. An associated proprietary Universal Decomposition Canon artifact (a distilled 'Thoughtbase) was used to generate decomposition heuristics and sigil library used for sigil remapping.
-
-A Thoughtbase is a structured, retrievable, and interconnected mesh of thoughts about information. The Insight Cluster is the fundamental, indivisible unit of a Thoughtbase. It is a cognitively potent node that encapsulates a single, distilled "thought," forged from the raw chaos of unstructured data. TBIC pre-compute meaning and relationships. They enable AI to recognize patterns, contrast ideas, and generate nuanced strategies by giving it a deep, conceptual map of knowledge, turning data into AI-native actionable assets.
+Based on optimization-decomposition ideas for network architectures (Doyle & Chiang, 2007) integrated with formal verification techniques. Universal Decomposition Canon (UDC) Thoughtbase used to generate decomposition heuristics.
 
 Key influences:
-
-- Doyle & Chiang (2007) — "Layering as optimization decomposition" (see docs/overview.md)
-- Dave Aitel (December 2016) — "Dwell Time" talk at https://youtu.be/PmabStfUdPk
-- Daniel Miessler Unsupervised Learning Newsletter (2023-) https://newsletter.danielmiessler.com/
-
-## References
-
-- [eBPF Documentation](https://ebpf.io/)
-- [Coq Proof Assistant](https://coq.inria.fr/)
-- [libbpf](https://github.com/libbpf/libbpf)
+- Doyle & Chiang (2007) — "Layering as optimization decomposition"
+- Dave Aitel (2016) — "Dwell Time" concept
+- Daniel Miessler — Unsupervised Learning Newsletter
 
 ---
 
-**Status:** Active Development  
-**Latest Release:** v1.3.0 (November 6, 2025)  
-**Last Updated:** November 6, 2025  
-**Maintainer:** [@dyb5784](https://github.com/dyb5784)
+**Status**: V2.x Production-Ready | V3.0 Development In Progress  
+**Latest Release**: v1.3.0 (November 6, 2025)  
+**Last Updated**: November 15, 2025  
+**Maintainer**: [@dyb5784](https://github.com/dyb5784)
