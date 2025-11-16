@@ -17,4 +17,4 @@
 ```bash
 make verify
 ```
-Proofs must pass before merge.
+Proofs currently fail to compile due to type unification errors (see DEV-NOTES.md). Must be fixed before merge.

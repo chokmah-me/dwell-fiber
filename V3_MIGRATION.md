@@ -24,3 +24,10 @@ TCM assigns tier, ADMM updates price per PID.
 ## Rollback
 
 Restore V2 via backup branch if needed.
+
+## References
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) – System design details
+- [FORMAL_VERIFICATION.md](FORMAL_VERIFICATION.md) – Coq proof structure
+- `coq/dwell_stable.v` – Formal lemmas (WIP convexity, Lyapunov drift)
+- [V3_PIVOT_RESEARCH_DOSSIER.md](V3_PIVOT_RESEARCH_DOSSIER.md) – Detailed research analysis for the pivot

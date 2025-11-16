@@ -2,7 +2,7 @@
 
 **Date**: November 4, 2025  
 **Duration**: Full development session  
-**Status**: ✅ **COMPLETE - ENFORCEMENT LIVE**  
+**Status**: ✅ **ENFORCEMENT LIVE & TESTED** (formal proofs not yet verified)
 
 ---
 
@@ -251,13 +251,11 @@ sudo ./bin/dwell-fiber-daemon \
 
 ## 🎓 Learn More
 
-- **Architecture**: `docs/architecture.md`
-- **Implementation**: `docs/making-of.md`
-- **Testing Guide**: `TESTING.md`
-- **Enforcement Details**: `ENFORCEMENT_TESTING.md`
-- **Setup Instructions**: `VM_SETUP_GUIDE.md`
-- **Quick Reference**: `ENFORCEMENT_READY.md`
-- **Current Status**: `PROJECT_STATUS.md`
+- **ADMM Algorithm**: See `coq/dwell_stable.v` for formal proofs
+- **BPF Internals**: See `bpf/dwell_monitor.bpf.c` for kernel code
+- **Architecture**: See `docs/architecture.md`
+- **Implementation Details**: See `docs/making-of.md`
+- **V3 Pivot Research**: See `V3_PIVOT_RESEARCH_DOSSIER.md`
 
 ---
 

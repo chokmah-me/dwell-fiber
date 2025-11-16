@@ -70,10 +70,10 @@ Dwell-Fiber is a **formally-verified eBPF-based ransomware defense system** that
   - Stage 4 (15s): Killed ✅
 
 ### Formal Verification
-- ✅ `coq/dwell_stable.v` - ADMM stability proofs
-- ✅ Verification: `make verify` passes
-- ✅ Parameter validation: α ∈ (0, 2), stable
-- ✅ Convergence guaranteed by Lyapunov theory
+- ✅ `coq/dwell_stable.v` - ADMM stability proofs (code written, but compilation fails)
+- ❌ Verification: `make verify` fails due to type issues
+- ✅ Parameter validation: α ∈ (0, 2), stable (theoretical)
+- ❌ Convergence guaranteed by Lyapunov theory (not yet verified)
 
 ---
 
@@ -304,6 +304,7 @@ sudo journalctl -u dwell-fiber-daemon -f
 | `VM_SETUP_GUIDE.md` | Ubuntu setup | ✅ Created |
 | `ENFORCEMENT_READY.md` | Quick reference | ✅ Created |
 | `TROUBLESHOOTING.md` | Common issues | ✅ Created |
+| `V3_PIVOT_RESEARCH_DOSSIER.md` | Research rationale | ✅ Created |
 
 ---
 

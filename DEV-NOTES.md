@@ -68,14 +68,25 @@ make clean coq  # ❌ FAILS at dwell_stable.v line 76
 
 ---
 
+## V3 Pivot Research Dossier
+
+Created `V3_PIVOT_RESEARCH_DOSSIER.md` documenting the empirical failure of dwell-time metric against LockBit intermittent encryption, and the theoretical rationale for WIP metric with adaptive weighting.
+
 ## V3 Commit/Tag/Push Instructions
 
 After updating all files for V3:
 
 ```powershell
 git add .
-git commit -m "feat: Dwell-Fiber V3 – WIP metric, TCM, discrete ADMM, Coq proofs, docs"
-git tag -a v3.0.0 -m "Dwell-Fiber V3.0.0: Adaptive I/O Pricing, formal stability"
+git commit -m "feat: Complete Dwell-Fiber V3 implementation with WIP metric, TCM tiers, discrete ADMM, Coq proofs, and comprehensive docs
+
+- Implement WIP metric: ω₁·TBW + ω₂·UFM with tier-based weights/budgets
+- Add Trust Classification Module (TCM) for T1/T1.5/T2 tier assignment
+- Update eBPF to kprobe/vfs_write with 1.0s windowed aggregation
+- Refactor ADMM controller for dynamic budgets and discrete sampling
+- Add Coq lemmas: wip_is_convex, dual_price_bounded_under_switch, bounded_lyapunov_drift_discrete_wip
+- Create comprehensive docs: README, ARCHITECTURE.md, V3_MIGRATION.md, FORMAL_VERIFICATION.md, CHANGELOG.md
+- Update status to reflect formal verification in progress (proofs have type issues)
+- Closes intermittent-access ransomware vulnerability (LockBit bypass)"
 git push origin main
-git push origin --tags
 ```

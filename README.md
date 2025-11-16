@@ -32,85 +32,57 @@ sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
 
 # Dwell-Fiber V3: Adaptive I/O Pricing Ransomware Defense
 
-Dwell-Fiber is a **formally-verified eBPF-based ransomware defense system** that enforces economic costs on suspicious file access patterns using **Weighted I/O Pressure (WIP)** pricing and **ADMM optimization** with proven stability guarantees.
+Dwell-Fiber is a formally-verified eBPF-based ransomware defense system enforcing economic costs on suspicious file access patterns using Weighted I/O Pressure (WIP) pricing and ADMM optimization.
 
 ## Core Innovation: WIP Metric
 
-V3 replaces the flawed dwell-time metric (bypassed by sub-second ransomware access) with **rate-based signals** tracked over 1-second windows:
+V3 replaces latency-based dwell time with rate-based signals over 1-second windows:
+- **TBW** (Total Bytes Written): MB/s
+- **UFM** (Unique Files Modified): Files/s
 
-- **TBW** (Total Bytes Written): Volume in MB/s
-- **UFM** (Unique Files Modified): Scattergun count in Files/s
+WIP = ω₁·TBW + ω₂·UFM, with dynamic weights via Trust Classification Module (TCM):
 
-Weighted I/O Pressure combines them:
-```
-WIP(t) = ω₁·TBW(t) + ω₂·UFM(t)
-```
+| Tier | Profile | ω₁ | ω₂ | Budget | Detection |
+|------|---------|----|----|--------|-----------|
+| T1   | Backups | 0.9 | 0.1 | 12000  | TBW ≥ 10k MB/s OR UFM ≤ 1k |
+| T1.5 | Dev Builds | 0.55 | 0.45 | 8000   | UFM ≥ 20k & TBW ≥ 500 |
+| T2   | Untrusted | 0.3 | 0.7 | 4000   | Default |
 
-Dynamic weights (ω₁, ω₂) adapt via **Trust Classification Module (TCM)** based on process behavior:
+## Architecture
 
-| Tier | Profile         | ω₁  | ω₂  | Budget | Detection Criteria |
-|------|----------------|-----|-----|--------|-------------------|
-| T1   | Backups        | 0.9 | 0.1 | 12000  | TBW ≥ 10k MB/s OR UFM ≤ 1k |
-| T1.5 | Dev Builds     |0.55 |0.45 | 8000   | UFM ≥ 20k & TBW ≥ 500 |
-| T2   | Untrusted      |0.3  |0.7  | 4000   | TBW < 10 & UFM ≥ 1k |
+Three-layer: Kernel (eBPF) → Userspace (Go Daemon) → Formal (Coq).
 
-## System Architecture
-
-Three-layer design: Kernel (eBPF) → Userspace (Go Daemon) → Formal (Coq).
-
-- **Kernel**: kprobe/vfs_write aggregates TBW/UFM per PID per 1s window, emits ringbuf events.
-- **Userspace**: TCM classifies tier, ADMM updates price: π(t+1) = max(0, π(t) + α·(WIP - B_tier)).
-- **Formal**: Coq proves WIP convexity, price boundedness under switches, Lyapunov drift.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
+- **Kernel**: kprobe/vfs_write aggregates TBW/UFM per PID, emits ringbuf events.
+- **Userspace**: TCM classifies tier, ADMM updates price: π(t+1) = max(0, π(t) + α·(WIP(t) - B_tier)).
+- **Formal**: Coq proves WIP convexity, price boundedness under tier switch, Lyapunov drift.
 
 ## V3 Transition from V0
 
-V0 used dwell time (file open duration), defeated by intermittent ransomware. V3 uses rate-based WIP to detect malicious patterns without latency dependence.
+V0 used dwell time (file open duration), defeated by sub-second ransomware. V3 uses rate-based WIP to detect malicious patterns without latency dependence.
 
 Migration details: [V3_MIGRATION.md](V3_MIGRATION.md).
 
 ## Build & Run
 
-Prerequisites:
 ```bash
 sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
-sudo apt-get install clang libbpf-dev coq golang-1.24
+make bpf && make verify && make daemon
+sudo ./bin/dwell-fiber-daemon
 ```
 
-Build order:
-```bash
-make bpf      # eBPF object
-make verify   # Coq proofs (<1s)
-make daemon   # Go binary
-```
-
-Run:
-```bash
-sudo ./bin/dwell-fiber
-# Metrics: http://localhost:9090
-```
+Metrics: http://localhost:9090
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) – Three-layer design and data flow
-- [V3_MIGRATION.md](V3_MIGRATION.md) – V0→V3 pivot: dwell to WIP
-- [FORMAL_VERIFICATION.md](FORMAL_VERIFICATION.md) – Coq proof structure and lemmas
-- [CHANGELOG.md](CHANGELOG.md) – Version history and changes
-- [DEV-NOTES.md](DEV-NOTES.md) – Development notes and technical debt
+- [ARCHITECTURE.md](ARCHITECTURE.md) – System design
+- [V3_MIGRATION.md](V3_MIGRATION.md) – V0 to V3 transition
+- [V3_PIVOT_RESEARCH_DOSSIER.md](V3_PIVOT_RESEARCH_DOSSIER.md) – Research rationale for V3 pivot
+- [FORMAL_VERIFICATION.md](FORMAL_VERIFICATION.md) – Coq proofs
+- [CHANGELOG.md](CHANGELOG.md) – Version history
 
-## Key Parameters
+## Status
 
-- `alpha`: ADMM step size (0.6, proven stable 0 < α < 2)
-- `Δt`: Window size (1.0s)
-- `throttle_price`: Threshold for throttling (500)
-- `kill_price`: Threshold for termination (1000)
-
-## Testing
-
-- Unit: `go test ./...`
-- Formal: `make verify`
-- Integration: `sudo test/run_e2e.sh`
+V3 implementation complete; formal verification proofs have type unification issues and are not yet verified (see DEV-NOTES.md).
 
 ## License
 
