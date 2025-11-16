@@ -77,6 +77,7 @@ Metrics: http://localhost:9090
 - [ARCHITECTURE.md](ARCHITECTURE.md) – System design
 - [V3_MIGRATION.md](V3_MIGRATION.md) – V0 to V3 transition
 - [V3_PIVOT_RESEARCH_DOSSIER.md](V3_PIVOT_RESEARCH_DOSSIER.md) – Research rationale for V3 pivot
+- [V3_1_FTAP_DOSSIER.md](V3_1_FTAP_DOSSIER.md) – Future work rationale for File-Type Adaptive Pricing (V3.1)
 - [FORMAL_VERIFICATION.md](FORMAL_VERIFICATION.md) – Coq proofs
 - [CHANGELOG.md](CHANGELOG.md) – Version history
 
