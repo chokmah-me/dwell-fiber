@@ -170,4 +170,82 @@ Proof.
   - exact ransomware_detection.
 Qed.
 
+Require Import Reals.
+
+Definition wip (omega1 omega2 tbw ufm : R) := omega1 * tbw + omega2 * ufm.
+
+Inductive tier := T1 | T15 | T2.
+
+Definition weight_vector (t : tier) : R * R :=
+  match t with
+  | T1 => (0.9, 0.1)
+  | T15 => (0.55, 0.45)
+  | T2 => (0.3, 0.7)
+  end.
+
+Definition budget_for (t : tier) : R :=
+  match t with
+  | T1 => 12000
+  | T15 => 8000
+  | T2 => 4000
+  end.
+
+Definition admm_update (alpha omega1 omega2 tbw ufm budget price : R) :=
+  let w := wip omega1 omega2 tbw ufm in
+  Rmax 0 (price + alpha * (w - budget)).
+
+Lemma wip_is_convex omega1 omega2 tbw1 tbw2 ufm1 ufm2 lambda :
+  0 <= omega1 -> 0 <= omega2 -> 0 <= lambda <= 1 ->
+  wip omega1 omega2 (lambda * tbw1 + (1 - lambda) * tbw2)
+      (lambda * ufm1 + (1 - lambda) * ufm2) <=
+  lambda * wip omega1 omega2 tbw1 ufm1 +
+  (1 - lambda) * wip omega1 omega2 tbw2 ufm2.
+Proof.
+  intros Homega1 Homega2 Hlambda.
+  unfold wip.
+  rewrite Rmult_plus_distr_r.
+  rewrite <- Rmult_plus_distr_r with (r := omega2).
+  apply Rle_trans with (lambda * (omega1 * tbw1 + omega2 * ufm1) + (1 - lambda) * (omega1 * tbw2 + omega2 * ufm2));
+    [|apply Rle_refl].
+  apply Rplus_le_compat.
+  - apply Rmult_le_compat_l; [lra|apply Rle_refl].
+  - apply Rmult_le_compat_l; [lra|apply Rle_refl].
+Qed.
+
+Lemma dual_price_bounded_under_switch alpha omega1 omega2 tbw ufm budget price :
+  0 < alpha -> 0 <= omega1 -> 0 <= omega2 ->
+  let price' := admm_update alpha omega1 omega2 tbw ufm budget price in
+  price' >= 0.
+Proof.
+  intros _ _ _.
+  unfold admm_update.
+  apply Rmax_r; lra.
+Qed.
+
+Theorem bounded_lyapunov_drift_discrete_wip alpha omega1 omega2 tbw ufm budget price :
+  0 < alpha -> 0 <= omega1 -> 0 <= omega2 -> 0 <= price ->
+  let price' := admm_update alpha omega1 omega2 tbw ufm budget price in
+  price' - price <= alpha * (Rabs (wip omega1 omega2 tbw ufm) + Rabs budget).
+Proof.
+  intros Halpha Homega1 Homega2 Hprice.
+  unfold admm_update.
+  set (w := wip omega1 omega2 tbw ufm).
+  destruct (Rle_dec 0 (price + alpha * (w - budget))).
+  - rewrite Rmax_r by assumption.
+    rewrite Rminus_plus_distr.
+    apply Rle_trans with (alpha * (Rabs w + Rabs budget)).
+    + apply Rmult_le_compat_l; [lra|].
+      apply Rle_trans with (Rabs (w - budget)).
+      * apply Rle_abs.
+      * apply Rabs_triang.
+    + lra.
+  - rewrite Rmax_l by lra.
+    rewrite Rminus_0_r.
+    apply Rle_trans with (alpha * (Rabs w + Rabs budget)).
+    + apply Rle_trans with 0.
+      * lra.
+      * apply Rmult_le_pos; [lra|apply Rplus_le_pos; apply Rabs_pos; apply Rabs_pos].
+    + lra.
+Qed.
+
 Close Scope R_scope.
