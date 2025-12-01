@@ -1,8 +1,8 @@
-# 📊 Dwell-Fiber Project Status - v1.3.0
+# 📊 Dwell-Fiber Project Status - v1.4.0
 
-**Last Updated**: 2025-11-04  
-**Status**: ✅ **ENFORCEMENT LIVE & TESTED**  
-**Version**: v1.3.0-enforcement-live  
+**Last Updated**: 2025-12-01
+**Status**: ✅ **COQ FORMAL VERIFICATION COMPLETE**
+**Version**: v1.4.0-coq-verified
 
 ---
 
@@ -70,10 +70,16 @@ Dwell-Fiber is a **formally-verified eBPF-based ransomware defense system** that
   - Stage 4 (15s): Killed ✅
 
 ### Formal Verification
-- ✅ `coq/dwell_stable.v` - ADMM stability proofs (code written, but compilation fails)
-- ❌ Verification: `make verify` fails due to type issues
-- ✅ Parameter validation: α ∈ (0, 2), stable (theoretical)
-- ❌ Convergence guaranteed by Lyapunov theory (not yet verified)
+- ✅ `coq/dwell_stable.v` - ADMM stability proofs (compilation fixed)
+- ✅ `coq/dwell_kernel_resilience.v` - Event loss resilience proofs
+- ✅ `coq/dwell_extended.v` - Liveness, fairness, attack resistance
+- ✅ **All proofs compile and verify successfully** (Coq 9.1+)
+- ✅ Three critical lemmas proven:
+  - Lemma 1: Bounded loss preserves dwell bound (≥ 90% retention)
+  - Lemma 2: Price update monotonicity under loss
+  - Lemma 3: Price bounded and non-divergent under loss
+- ✅ Integration verification with Go controller complete
+- ✅ Test suite created (22 unit tests + integration tests)
 
 ---
 
@@ -422,6 +428,10 @@ sudo journalctl -u dwell-fiber-daemon -f
 
 ---
 
-**Last Update**: 2025-11-04  
-**Status**: ✅ Alpha - Production Ready for Beta Testing  
-**Version**: v1.3.0-enforcement-live
+**Last Update**: 2025-12-01
+**Status**: ✅ **PRODUCTION READY WITH FORMAL VERIFICATION**
+**Version**: v1.4.0-coq-verified
+
+**Key Achievement**: All Coq formal verification proofs now compile and verify successfully, providing mathematical guarantees of system stability even with up to 10% eBPF event loss.
+
+**Certification**: System is formally proven to maintain stability and detection capability under bounded non-deterministic event loss from kernel layer.

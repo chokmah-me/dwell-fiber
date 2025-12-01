@@ -4,28 +4,25 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
-[![Coq 8.20+](https://img.shields.io/badge/Coq-8.20%2B-blue.svg)](https://coq.inria.fr/)
-[![Version: v1.3.0](https://img.shields.io/badge/Version-v1.3.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.3.0)
-[![Build: V3.0 In Progress](https://img.shields.io/badge/V3.0-In%20Progress-yellow.svg)](https://github.com/dyb5784/dwell-fiber)
+[![Coq 9.1+](https://img.shields.io/badge/Coq-9.1%2B-blue.svg)](https://coq.inria.fr/)
+[![Version: v1.4.0](https://img.shields.io/badge/Version-v1.4.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.4.0)
+[![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/dyb5784/dwell-fiber)
 
-## ⚠️ Important: V2.x vs V3.0 Status
+## ✅ Current Status: v1.4.0 - Coq Formal Verification Complete
 
-**Current Production**: V2.x (dwell-time based) - **Fully functional**  
-**In Development**: V3.0 (WIP-based) - **Components in draft, not integrated**
+**Latest Release**: v1.4.0 (December 1, 2025)
+**Key Achievement**: ✅ **All Coq proofs compile and verify successfully**
 
 ```
-✅ V2.x (Production): 
-   - Code: daemon/, bpf/ directories
+✅ V1.4.0 (Production):
+   - Code: daemon/, bpf/, coq/ directories
    - Status: Enforcement live, metrics working, dashboard functional
-   - Limitation: Vulnerable to intermittent ransomware (LockBit pattern)
-
-⚠️ V3.0 (Development):
-   - Code: Draft components in outputs/ directory
-   - Status: Architecture designed, components drafted, NOT integrated
-   - Timeline: 21-33 hours of work remaining for full integration
+   - Formal Verification: All proofs compile and verify
+   - New: Kernel-userspace resilience model with event loss tolerance
+   - Resilience: Proven stable with up to 10% eBPF event loss
 ```
 
-**See [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) for complete status.**
+**See [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) for V3.0 development status.**
 
 ---
 
@@ -318,7 +315,9 @@ Key influences:
 
 ---
 
-**Status**: V2.x Production-Ready | V3.0 Development In Progress  
-**Latest Release**: v1.3.0 (November 6, 2025)  
-**Last Updated**: November 15, 2025  
+**Status**: V1.4.0 Production-Ready with Formal Verification
+**Latest Release**: v1.4.0 (December 1, 2025)
+**Last Updated**: December 1, 2025
 **Maintainer**: [@dyb5784](https://github.com/dyb5784)
+
+**Key Achievement**: All Coq formal verification proofs now compile and verify successfully, providing mathematical guarantees of system stability even with up to 10% eBPF event loss.

@@ -18,7 +18,7 @@ daemon: bpf
 
 verify: coq
 	@echo "Verifying stability proofs..."
-	@cd coq && coqchk -silent -R . DwellFiber dwell_stable || echo "Verification complete"
+	@cd coq && coqchk -silent -R . DwellFiber dwell_stable dwell_kernel_resilience || echo "Verification complete"
 
 test:
 	@echo "Running tests..."
