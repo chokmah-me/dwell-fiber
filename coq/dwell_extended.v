@@ -1,24 +1,13 @@
 (* Dwell-Fiber Extended Proofs *)
 Require Import Reals.
 From Coq Require Import ZArith.
-
-(* Ceiling: up r returns smallest integer >= r *)
-Definition nat_ceil (r : R) : nat :=
-  Z.to_nat (up r).
-
-(* Custom ceiling function for nat *)
-Definition nat_ceil (r : R) : nat :=
 Require Import Lia.
-From Coq Require Import ZArith.
-
-(* Ceiling: up r returns smallest integer >= r *)
-Definition nat_ceil (r : R) : nat :=
-  Z.to_nat (up r).
-
-(* Custom ceiling function for nat *)
-Definition nat_ceil (r : R) : nat :=
 Require Import Nat.
 Open Scope R_scope.
+
+(* Ceiling: up r returns smallest integer >= r *)
+Definition nat_ceil (r : R) : nat :=
+  Z.to_nat (up r).
 
 Parameter alpha budget throttle_threshold kill_threshold : R.
 Axiom alpha_range : 0 < alpha /\ alpha < 2.
@@ -147,8 +136,7 @@ Theorem process_safety_nonempty :
   forall (s : process_state),
   s.(pid) > 0 -> s.(pid) < 65536.
 Proof.
-  intros s H; omega.
+  intros s H; lia.
 Qed.
 
-End of file
 Close Scope R_scope.

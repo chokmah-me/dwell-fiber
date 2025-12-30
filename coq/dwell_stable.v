@@ -11,7 +11,8 @@ Open Scope R_scope.
 
 Parameter alpha : R.
 Parameter budget : R.
-Axiom alpha_range : 0 < alpha < 2.
+Axiom alpha_pos : 0 < alpha.
+Axiom alpha_lt_2 : alpha < 2.
 Axiom budget_is_five : budget = 5.
 
 Definition price := R.
@@ -31,17 +32,16 @@ Admitted. (* TODO: Complete proof *)
 
 Theorem price_bounded :
   forall (p : price) (d : dwell),
-    0 <= p -> 0 <= d <= 100 ->
+    0 <= p -> 0 <= d -> d <= 100 ->
     0 <= update_price p d.
 Proof.
-  intros p d Hp Hd.
+  intros p d Hp Hd_low Hd_high.
   apply price_nonnegative; assumption.
 Admitted. (* TODO: Complete proof *)
 
 Theorem convergence_to_budget :
   forall (p d : price) (epsilon : R),
   d <= budget ->
-  0 < alpha -> alpha < 2 ->
   0 < epsilon ->
   0 <= p ->
   exists n : nat,
@@ -50,7 +50,7 @@ Theorem convergence_to_budget :
   let iter_result := Nat.iter k (fun x => update_price x d) p in
   Rabs iter_result < epsilon.
 Proof.
-  intros p d epsilon Hd Hαpos Hαlt Heps Hp.
+  intros p d epsilon Hd Heps Hp.
   exists 1000%nat.
   intros k Hk.
   admit.
