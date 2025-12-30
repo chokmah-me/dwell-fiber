@@ -8,21 +8,22 @@
 [![Version: v1.4.0](https://img.shields.io/badge/Version-v1.4.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.4.0)
 [![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/dyb5784/dwell-fiber)
 
-## ✅ Current Status: v1.4.0 - Coq Formal Verification Complete
+## ✅ Current Status: v1.4.0 - Coq Framework Established
 
 **Latest Release**: v1.4.0 (December 1, 2025)
-**Key Achievement**: ✅ **All Coq proofs compile and verify successfully**
+**Key Achievement**: ✅ **Coq formal verification framework established with 43% proofs complete**
 
 ```
 ✅ V1.4.0 (Production):
    - Code: daemon/, bpf/, coq/ directories
    - Status: Enforcement live, metrics working, dashboard functional
-   - Formal Verification: All proofs compile and verify
-   - New: Kernel-userspace resilience model with event loss tolerance
-   - Resilience: Proven stable with up to 10% eBPF event loss
+   - Formal Verification: Framework established (26/61 proofs complete, 22 admitted)
+   - Coq Status: All files compile successfully; proof completion ongoing
+   - Architecture: V2.x (dwell-time based) - stable and tested
 ```
 
-**See [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) for V3.0 development status.**
+**V3.0 Development**: See feature branch `feature/v3-wip-architecture` for experimental
+WIP-based architecture. V3.0 is NOT production-ready.
 
 ---
 
@@ -72,7 +73,7 @@ cd dwell-fiber
 # Build all components
 make all
 
-# Verify mathematical proofs (⚠️ currently has compilation errors)
+# Verify mathematical proofs (⚠️ 36% of proofs admitted - work in progress)
 make verify
 ```
 
@@ -102,7 +103,7 @@ sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
 ### V2.x (Production)
 - 🛡️ **Real-time Protection**: eBPF-based monitoring of file dwell times
 - 📊 **Economic Enforcement**: ADMM-based pricing that adapts to process behavior
-- ✅ **Formally Verified**: Coq proofs guarantee system stability (⚠️ proofs have compilation errors)
+- ✅ **Formal Verification Framework**: Coq proofs established (43% complete, ongoing work)
 - 🚀 **Low Overhead**: Sub-millisecond latency impact
 - 📈 **Observable**: Built-in Prometheus metrics and web UI
 - 👥 **User-Friendly**: Safe-by-default (observation mode), explicit `--enable-enforcement` to activate
@@ -162,16 +163,9 @@ Kernel (eBPF)              Userspace (Go)           Metrics
 |----------|----------|
 | **End Users** | [User Guide](USER_GUIDE.md) — 5-minute setup, no jargon |
 | **Developers** | [Architecture Docs](docs/architecture.md) — V2.x system design |
-| **V3 Developers** | [V3 Quickstart](V3_QUICKSTART.md) — Integration guide |
-| **Researchers** | [Stability Proofs](coq/dwell_stable.v) — Formal verification (⚠️ has errors) |
+| **Researchers** | [Stability Proofs](coq/dwell_stable.v) — Formal verification (43% complete) |
 | **DevOps** | [Deployment Guide](docs/making-of.md) — systemd setup |
 | **Release Notes** | [v1.3.0 Changelog](CHANGELOG.md) — Latest features |
-
-### V3.0 Documentation
-- [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) — **Complete V3 status & checklist**
-- [V3_PIVOT_RESEARCH_DOSSIER.md](V3_PIVOT_RESEARCH_DOSSIER.md) — **Why V3? (LockBit problem)**
-- [V3_QUICKSTART.md](V3_QUICKSTART.md) — Developer integration guide
-- [ARCHITECTURE_V3.md](ARCHITECTURE_V3.md) — V2 vs V3 comparison
 
 ---
 
@@ -211,22 +205,8 @@ dwell-fiber/
 - ✅ Enforcement live (throttle via cgroups v2, kill via signals)
 - ✅ Metrics & dashboard working
 - ✅ Safety checks (protected processes)
-- ⚠️ Coq proofs have type unification errors (need fixing)
-- ⚠️ Vulnerable to intermittent ransomware (LockBit pattern)
-
-### V3.0 Development Status ⚠️
-- ✅ Research complete (V3_PIVOT_RESEARCH_DOSSIER.md)
-- ✅ Architecture designed
-- ✅ Draft eBPF program created (outputs/dwell_monitor_v3.bpf.c)
-- ✅ Draft controller created (outputs/controller_v3.go)
-- ❌ Not integrated into build system
-- ❌ Not compiled or tested
-- ❌ Coq proofs not written
-- ❌ E2E tests not created
-
-**Estimated Completion**: 21-33 hours of development work
-
-See [V3_MIGRATION_STATUS.md](V3_MIGRATION_STATUS.md) for detailed checklist.
+- ⚠️ Coq proofs: 43% complete (26/61), 36% admitted (22/61), ongoing work
+- ⚠️ Known limitation: Vulnerable to intermittent ransomware (LockBit pattern)
 
 ---
 

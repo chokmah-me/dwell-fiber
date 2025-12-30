@@ -10,58 +10,61 @@ All notable changes to this project are documented in this file.
 
 ## [1.4.0] - 2025-12-01
 
-### ✅ Coq Formal Verification COMPLETE
+### ✅ Coq Formal Verification Framework Established
 
-**Major Achievement**: All Coq proofs now compile and verify successfully!
+**Major Achievement**: Coq proof framework established with compilation verified!
+
+#### Proof Status Summary
+- **Total proofs**: 61 theorems/lemmas across 4 files
+- **Completed**: 26 proofs (43%) - fully verified with Qed/Defined
+- **Admitted**: 22 proofs (36%) - placeholders for future work
+- **Compilation**: ✅ All 4 Coq files compile without errors
+- **Verification**: 🚧 Ongoing - framework established, proof completion in progress
 
 #### Compilation Fixes (dwell_stable.v)
-- ✅ Fixed compound inequality syntax (`0 < alpha < 2` → separate axioms)
-- ✅ Added missing imports for `Rmax` and `Rabs` (Max, RIneq modules)
+- ✅ Fixed compound inequality syntax (0 < alpha < 2 → separate axioms)
+- ✅ Added missing imports for Rmax and Rabs (Max, RIneq modules)
 - ✅ Fixed let-binding syntax in theorem statements
-- ✅ Corrected `nat_ceil` type conversion implementation
+- ✅ Corrected nat_ceil type conversion implementation
 - ✅ Completed incomplete proof applications with proper tactics
-- ✅ **Result**: `dwell_stable.v` compiles without errors
+- ✅ **Result**: dwell_stable.v compiles without errors
 
 #### New: Kernel-Userspace Resilience Model
-- ✅ Created `coq/dwell_kernel_resilience.v` (335 lines)
+- ✅ Created coq/dwell_kernel_resilience.v (335 lines)
 - ✅ Formalized bounded event loss model with δ-rate constraints
-- ✅ **Lemma 1**: `bounded_loss_preserves_dwell_bound`
-  - Proves ≥ (1-δ) fraction of dwell retained under loss
-  - Uses induction and inequality reasoning
-- ✅ **Lemma 2**: `price_update_monotonic_dwell`
-  - Shows price updates are monotonic in total dwell
-  - Handles `Rmax` case analysis correctly
-- ✅ **Lemma 3**: `bounded_price_under_loss`
-  - Proves price remains bounded and non-divergent
-  - Critical for system stability guarantee
-- ✅ **Main Theorem**: `admm_resilience_to_event_loss`
-  - Combines lemmas to show bounded deviation under loss
+- ⚠️ **Lemma 1**: bounded_loss_preserves_dwell_bound - ADMITTED
+- ⚠️ **Lemma 2**: price_update_monotonic_dwell - ADMITTED
+- ⚠️ **Lemma 3**: bounded_price_under_loss - ADMITTED
+- ⚠️ **Main Theorem**: admm_resilience_to_event_loss - ADMITTED
+- ℹ️ Proofs compile; formal verification in progress
+
+#### Extended Verification Properties (dwell_extended.v)
+- ✅ Created coq/dwell_extended.v with liveness/fairness properties
+- ⚠️ 7 of 7 proofs ADMITTED - framework established, verification ongoing
 
 #### Integration & Testing
-- ✅ Updated `coq/Makefile` with new file dependencies
-- ✅ Updated root `Makefile` verification target
-- ✅ Created `coq/test_resilience.v` (22 unit tests)
-- ✅ Verified Go controller parameter alignment
-- ✅ Designed `max_burst_loss = 5` test case
-- ✅ Created comprehensive integration verification report
+- ✅ Updated coq/Makefile with new file dependencies
+- ✅ Updated root Makefile verification target
+- ✅ Created coq/test_resilience.v (22 unit tests, 2 admitted)
+- ✅ All files compile successfully on Windows with Coq 9.1+
 
 #### Documentation
-- ✅ `COQ_INSTALLATION.md` - Complete installation guide
-- ✅ `COQ_FIX_ANALYSIS.md` - Compilation error analysis
-- ✅ `COQ_RESILIENCE_STRATEGY.md` - Resilience model strategy
-- ✅ `COQ_RESILIENCE_IMPLEMENTATION.md` - Implementation guide
-- ✅ `COQ_INTEGRATION_GUIDE.md` - Integration framework
-- ✅ `INTEGRATION_VERIFICATION_REPORT.md` - Go/Coq integration analysis
+- ✅ COQ_INSTALLATION.md - Complete installation guide
+- ✅ COQ_FIX_ANALYSIS.md - Compilation error analysis
+- ✅ COQ_RESILIENCE_STRATEGY.md - Resilience model strategy
+- ✅ COQ_RESILIENCE_IMPLEMENTATION.md - Implementation guide
+- ✅ COQ_INTEGRATION_GUIDE.md - Integration framework
+- ✅ INTEGRATION_VERIFICATION_REPORT.md - Go/Coq integration analysis
+- ✅ docs/coq-ebpf-proof-failures.md - Comprehensive verification guide
 
-### Security & Resilience
-- **Event Loss Tolerance**: System proven stable with up to 10% eBPF event loss
-- **Burst Loss Handling**: Verified with `max_burst_loss = 5` constraint
-- **Formal Guarantees**: Three lemmas provide deterministic bounds on system behavior
-- **Integration**: Go controller parameters align with Coq model
+### Framework vs. Verification
+- **Framework Established**: ✅ All Coq files compile, structure validated
+- **Proof Completion**: 🚧 43% complete (26/61 proofs)
+- **Production Impact**: ✅ V2.x code is tested and functional
+- **Formal Guarantees**: 🚧 Mathematical proofs in progress
 
 ### Performance Impact
 - No runtime performance impact (verification is compile-time)
-- Resilience model adds compile-time proofs, no overhead
 - System maintains all v1.3.0 performance characteristics
 
 ### Breaking Changes
@@ -71,18 +74,17 @@ All notable changes to this project are documented in this file.
 ### Migration from v1.3.0
 ```bash
 # No code changes required
-# Simply pull latest and rebuild
 git pull origin main
 make clean daemon
 
 # Verify proofs (requires Coq 9.1+)
 cd coq && make verify
+# Note: Compilation succeeds; 36% of proofs are admitted (work in progress)
 ```
 
 ### Known Limitations
-- Coq must be installed to verify proofs (see COQ_INSTALLATION.md)
-- Windows users may need to configure OPAM PATH (see troubleshooting guide)
-- V3.0 WIP-based architecture still in development (separate effort)
+- Coq proofs: 36% admitted (22/61) - formal verification ongoing
+- V3.0 WIP-based architecture in separate feature branch (not production-ready)
 
 ---
 
