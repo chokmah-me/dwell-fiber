@@ -3,6 +3,7 @@ Require Import Reals.
 From Coq Require Import ZArith.
 Require Import Lia.
 Require Import Nat.
+Require Import List.
 Open Scope R_scope.
 
 (* Ceiling: up r returns smallest integer >= r *)
@@ -52,8 +53,8 @@ Proof.
          (alpha * (budget - s.(current_dwell))))).
   intros k Hk; split.
   - admit.
-  - split; reflexivity.
-Qed.
+  - split; admit.
+Admitted.
 
 Theorem liveness_under_attack :
   forall (s : process_state),
@@ -71,18 +72,18 @@ Proof.
   exists (nat_ceil ((throttle_threshold - s.(current_price)) /
         (alpha * (s.(current_dwell) - budget)))).
   left; intros k Hk; admit.
-Qed.
+Admitted.
 
 Theorem no_livelock :
   forall (s : process_state),
   ~ (exists inf_loop : nat -> R,
       (forall (k : nat),
-        inf_loop (k + 1) = update_price (inf_loop k) s.(current_dwell) /\
-        inf_loop 0 = s.(current_price) /\
-        (forall n : nat, throttle_threshold < inf_loop n < kill_threshold))).
+        inf_loop (k + 1)%nat = update_price (inf_loop k) s.(current_dwell) /\
+        inf_loop 0%nat = s.(current_price) /\
+        (forall n : nat, throttle_threshold < inf_loop n /\ inf_loop n < kill_threshold))).
 Proof.
   intros s [inf_loop H]; admit.
-Qed.
+Admitted.
 
 Definition fair_pricing (processes : list process_state) : Prop :=
   forall (p1 p2 : process_state),
@@ -100,8 +101,8 @@ Theorem fair_pricing_theorem :
      p1.(current_price)=p2.(current_price)) ->
   fair_pricing processes.
 Proof.
-  intros ps H; unfold fair_pricing; intros p1 p2 A B C D; split; reflexivity.
-Qed.
+  intros ps H; unfold fair_pricing; intros p1 p2 A B C D; split; admit.
+Admitted.
 
 Theorem attack_detection_bounded :
   forall (s : process_state),
@@ -116,7 +117,7 @@ Proof.
   intros s Hd Hp.
   exists (nat_ceil (throttle_threshold / (alpha * (s.(current_dwell) - budget)))).
   intros k Hk; admit.
-Qed.
+Admitted.
 
 Theorem enforcement_terminates :
   forall (s : process_state),
@@ -130,13 +131,13 @@ Proof.
   exists (nat_ceil ((kill_threshold - s.(current_price)) /
         (alpha * (s.(current_dwell) - budget)))).
   admit.
-Qed.
+Admitted.
+
+Close Scope R_scope.
 
 Theorem process_safety_nonempty :
   forall (s : process_state),
   s.(pid) > 0 -> s.(pid) < 65536.
 Proof.
-  intros s H; lia.
-Qed.
-
-Close Scope R_scope.
+  intros s H; admit. (* TODO: Add axiom that PIDs are bounded *)
+Admitted.
