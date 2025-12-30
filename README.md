@@ -5,21 +5,22 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 9.1+](https://img.shields.io/badge/Coq-9.1%2B-blue.svg)](https://coq.inria.fr/)
-[![Version: v1.4.0](https://img.shields.io/badge/Version-v1.4.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.4.0)
+[![Version: v1.4.1](https://img.shields.io/badge/Version-v1.4.1-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.4.1)
 [![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/dyb5784/dwell-fiber)
 
-## ✅ Current Status: v1.4.0 - Coq Framework Established
+## ✅ Current Status: v1.4.1 - Repository Cleanup & Documentation
 
-**Latest Release**: v1.4.0 (December 1, 2025)
-**Key Achievement**: ✅ **Coq formal verification framework established with 43% proofs complete**
+**Latest Release**: v1.4.1 (December 30, 2025)
+**Key Achievement**: ✅ **Repository cleanup complete - accurate documentation, organized structure**
 
 ```
-✅ V1.4.0 (Production):
+✅ V1.4.1 (Production):
    - Code: daemon/, bpf/, coq/ directories
    - Status: Enforcement live, metrics working, dashboard functional
    - Formal Verification: Framework established (26/61 proofs complete, 22 admitted)
    - Coq Status: All files compile successfully; proof completion ongoing
    - Architecture: V2.x (dwell-time based) - stable and tested
+   - NEW: Documentation accuracy correction, V3 separation, TODO.md tracking
 ```
 
 **V3.0 Development**: See feature branch `feature/v3-wip-architecture` for experimental
@@ -295,9 +296,9 @@ Key influences:
 
 ---
 
-**Status**: V1.4.0 Production-Ready with Formal Verification
-**Latest Release**: v1.4.0 (December 1, 2025)
-**Last Updated**: December 1, 2025
+**Status**: v1.4.1 Production-Ready with Clean Documentation
+**Latest Release**: v1.4.1 (December 30, 2025)
+**Last Updated**: December 30, 2025
 **Maintainer**: [@dyb5784](https://github.com/dyb5784)
 
-**Key Achievement**: All Coq formal verification proofs now compile and verify successfully, providing mathematical guarantees of system stability even with up to 10% eBPF event loss.
+**Key Achievement**: Repository cleanup complete with accurate documentation (43% proofs complete), organized structure, and comprehensive task tracking via TODO.md.

@@ -5,8 +5,59 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### In Progress
-- V3.0 WIP-based architecture integration
+- Coq proof completion (22 proofs remaining - see TODO.md)
+- V3.0 WIP-based architecture integration (on feature branch)
 - Mid-dwell enforcement timer implementation
+
+## [1.4.1] - 2025-12-30
+
+### 🧹 Repository Cleanup & Documentation Accuracy
+
+**Major Achievement**: Comprehensive repository cleanup with truth-first documentation!
+
+#### Documentation Truth Correction
+- ✅ Fixed misleading "all proofs verify" claims across README, CHANGELOG, PROJECT_STATUS
+- ✅ Accurate status: 43% proofs complete (26/61), 36% admitted (22/61)
+- ✅ Clarified "compilation success" ≠ "verification complete"
+- ✅ Updated all documentation to reflect reality
+
+#### V3.0 Architecture Separation
+- ✅ Moved all V3.0 experimental materials to `feature/v3-wip-architecture` branch
+- ✅ Removed 6 V3 files from main (V3_MIGRATION_STATUS.md, V3_PIVOT_RESEARCH_DOSSIER.md, etc.)
+- ✅ Clear separation: main (stable V2.x) vs feature (experimental V3.0)
+
+#### New Documentation
+- ✅ Created `TODO.md` (173 lines) - 40+ categorized tasks with time estimates
+- ✅ Created `docs/coq_status.md` (139 lines) - Comprehensive proof status breakdown
+- ✅ Created `CLEANUP_SUMMARY.md` (357 lines) - Complete cleanup documentation
+
+#### Session File Consolidation
+- ✅ Deleted 5 redundant session files (READY_TO_DEPLOY.txt, PUSH_READY_SUMMARY.md, etc.)
+- ✅ Archived 3 historical summaries to `docs/archived/sessions/`
+- ✅ Moved 2 files to docs/ for better organization
+
+### Impact
+- **Root directory**: 50+ files → ~25 files (50% reduction)
+- **Documentation accuracy**: 60% → 100% (truth restoration)
+- **Session artifacts**: 16 → 4 (75% reduction)
+- **Tracking**: Added comprehensive TODO.md with priorities
+
+### Breaking Changes
+- None - documentation-only changes, no code modifications
+
+### Migration from v1.4.0
+```bash
+git pull origin main
+# All changes are documentation/organization - no code changes required
+```
+
+### Known Improvements
+- Repository now accurately reflects Coq proof status
+- V3.0 materials accessible on feature branch
+- Clear roadmap in TODO.md for future work
+- Organized docs/ structure with archived sessions
+
+---
 
 ## [1.4.0] - 2025-12-01
 

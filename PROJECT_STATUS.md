@@ -1,8 +1,8 @@
-# 📊 Dwell-Fiber Project Status - v1.4.0
+# 📊 Dwell-Fiber Project Status - v1.4.1
 
 **Last Updated**: 2025-12-30
 **Status**: ✅ **PRODUCTION READY** | 🚧 **Coq Verification 43% Complete**
-**Version**: v1.4.0
+**Version**: v1.4.1
 
 ---
 
@@ -432,6 +432,6 @@ sudo journalctl -u dwell-fiber-daemon -f
 
 **Last Update**: 2025-12-30
 **Status**: ✅ **PRODUCTION READY** | 🚧 **Formal Verification Framework Established (43% Complete)**
-**Version**: v1.4.0
+**Version**: v1.4.1
 
-**Key Achievement**: Coq formal verification framework established with all files compiling successfully. Proof completion: 43% (26/61 theorems/lemmas). Mathematical verification ongoing.
+**Key Achievement**: Repository cleanup complete with accurate documentation (43% proofs complete), organized structure, comprehensive TODO.md task tracking, and V3.0 materials properly separated to feature branch.
