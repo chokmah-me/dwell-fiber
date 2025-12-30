@@ -1,3 +1,0 @@
-git add .
-git commit -m "docs: Add V3.1 FTAP dossier; update README references and status"
-git push origin main
