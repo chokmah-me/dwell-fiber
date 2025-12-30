@@ -1,4 +1,4 @@
-COQC := coqc
+COQC := /c/Coq-Platform~8.19~2024.10/bin/coqc
 COQFLAGS := -R . DwellFiber
 
 VFILES := dwell_stable.v dwell_kernel_resilience.v dwell_extended.v

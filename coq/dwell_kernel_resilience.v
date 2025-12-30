@@ -9,6 +9,7 @@ Require Import Lra.
 Require Import List.
 From Coq Require Import Arith.Arith.
 Require Import RIneq.
+From Coq Require Import Psatz.
 Import ListNotations.
 
 Open Scope R_scope.
@@ -162,8 +163,34 @@ Lemma update_price_monotonic :
   update_price p d1 <= update_price p d2.
 Proof.
   intros p d1 d2 Hp Hd1 Hd2.
-  admit. (* TODO: Fix Rmax_case lemma name or use different approach *)
-Admitted.
+  unfold update_price.
+  destruct (Rle_dec (p + alpha * (d1 - budget)) 0) as [H1|H1].
+  - (* d1 case: max returns 0 *)
+    rewrite Rmax_left by assumption.
+    apply Rmax_l.
+  - (* d1 case: max returns p + alpha*(d1-budget) *)
+    rewrite Rmax_right; [|lra].
+    destruct (Rle_dec (p + alpha * (d2 - budget)) 0) as [H2|H2].
+    + (* Edge case: This is actually impossible - derive contradiction *)
+      (* From H1: ~(p + alpha * (d1 - budget) <= 0), i.e., 0 < p + alpha * (d1 - budget) *)
+      (* From H2: p + alpha * (d2 - budget) <= 0 *)
+      (* From Hd2: d1 <= d2, so alpha*(d1-budget) <= alpha*(d2-budget) since alpha > 0 *)
+      (* This gives p + alpha*(d1-budget) <= p + alpha*(d2-budget) <= 0, contradicting H1 *)
+      exfalso.
+      assert (d1 - budget <= d2 - budget) by (apply Rplus_le_compat_r; exact Hd2).
+      assert (alpha * (d1 - budget) <= alpha * (d2 - budget)) by (apply Rmult_le_compat_l; [apply Rlt_le; exact alpha_pos | exact H]).
+      assert (p + alpha * (d1 - budget) <= p + alpha * (d2 - budget)) by (apply Rplus_le_compat_l; exact H0).
+      assert (p + alpha * (d1 - budget) <= 0) by (apply Rle_trans with (p + alpha * (d2 - budget)); assumption).
+      exact (H1 H4).
+    + (* Both max return positive values *)
+      rewrite Rmax_right; [|lra].
+      apply Rplus_le_compat_l.
+      apply Rmult_le_compat_l.
+      * apply Rlt_le; exact alpha_pos.
+      * assert (d1 - budget <= d2 - budget) as Hdiff.
+        { apply Rplus_le_compat_r. exact Hd2. }
+        exact Hdiff.
+Qed.
 
 Lemma price_update_monotonic_dwell :
   forall (p : price) (stream1 stream2 : event_stream),
@@ -172,7 +199,10 @@ Lemma price_update_monotonic_dwell :
   update_price_from_stream p stream1 <= update_price_from_stream p stream2.
 Proof.
   intros p stream1 stream2 Hp Hdwell.
-  admit. (* TODO: Apply update_price_monotonic after fixing it *)
+  unfold update_price_from_stream.
+  apply update_price_monotonic; try assumption.
+  (* total_dwell >= 0 by construction from max_dwell_bound axiom *)
+  admit.
 Admitted.
 
 (* ========================================================================== *)

@@ -1,6 +1,7 @@
 (* Dwell-Fiber Extended Proofs *)
 Require Import Reals.
 From Coq Require Import ZArith.
+From Coq Require Import Lra.
 Require Import Lia.
 Require Import Nat.
 Require Import List.
