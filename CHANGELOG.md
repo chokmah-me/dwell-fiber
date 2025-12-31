@@ -11,9 +11,11 @@ All notable changes to this project are documented in this file.
 
 ## [1.4.2] - 2025-12-30
 
-### 🔧 Coq Proof Compilation Fixes
+### 🔧 Coq Proof Compilation Fixes & Documentation Refactor
 
-**Major Achievement**: All Coq files now compile successfully with `make verify`!
+**Major Achievements**:
+- All Coq files now compile successfully with `make verify`
+- README refactored from 304 to 165 lines with organized sub-pages
 
 #### Proof Improvements
 - ✅ Added `From Coq Require Import Lra` to dwell_stable.v and dwell_extended.v
@@ -35,6 +37,20 @@ All notable changes to this project are documented in this file.
 - **Build status**: ❌ Compilation errors → ✅ Clean `make verify`
 - **Proof completion**: 43% → 60% (17% improvement)
 - **Verification**: Full compilation pipeline working on Windows
+
+#### Documentation Refactor
+- ✅ Created `docs/installation.md` (210 lines) - Complete setup guide with troubleshooting
+- ✅ Created `docs/v2-architecture.md` (250 lines) - V2 architecture, performance, security
+- ✅ Created `docs/v3-roadmap.md` (280 lines) - V3 WIP-based detection roadmap
+- ✅ Refactored README from 304 → 165 lines (46% reduction)
+- ✅ Removed duplicate sections, improved navigation with documentation table
+- ✅ All content preserved - reorganized for clarity and scannability
+
+### Impact
+- **Build status**: ❌ Compilation errors → ✅ Clean `make verify`
+- **Proof completion**: 43% → 60% (17% improvement)
+- **Documentation**: 304-line README → 165-line landing page + 3 focused sub-pages
+- **User experience**: ~8 min read → <2 min scan with clear navigation
 
 ### Technical Details
 Admitted proofs require advanced real analysis libraries (Banach fixed-point, geometric series convergence). These are standard "admit for now" patterns in Coq formalization - the mathematical framework is sound.
