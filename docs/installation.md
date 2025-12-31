@@ -176,16 +176,74 @@ sudo ./bin/dwell-fiber-daemon --log-level=debug
 **Error**: `undefined reference to 'libbpf_*'`
 - **Fix**: `sudo apt-get install libbpf-dev`
 
-### Runtime Errors
+### Build Errors
 
 **Error**: `permission denied` when starting daemon
-- **Fix**: Run with `sudo` (eBPF requires CAP_SYS_ADMIN)
+- **Cause**: BPF loading requires root or CAP_BPF capability
+- **Fix 1**: Run with `sudo ./bin/dwell-fiber-daemon`
+- **Fix 2**: Grant capability: `sudo setcap cap_bpf=ep ./bin/dwell-fiber-daemon`
 
 **Error**: `failed to load eBPF program`
+- **Cause**: Kernel version too old
 - **Fix**: Check kernel version (`uname -r` >= 5.8)
 
-**Error**: No processes showing in dashboard
-- **Fix**: Generate file activity (`cp /bin/ls /tmp/test-file`)
+**Error**: `undefined reference to 'libbpf_*'`
+- **Fix**: Install libbpf: `sudo apt-get install libbpf-dev`
+
+**Error**: `package github.com/cilium/ebpf: no Go files`
+- **Fix**: Download dependencies: `go mod download && go mod tidy`
+
+**Error**: `coqc: not found`
+- **Fix**: Install Coq: `sudo apt-get install coq && coq -v`
+
+### Runtime Issues
+
+**Problem**: Daemon starts but no BPF events appear
+- **Solution 1**: Try simulation mode: `./bin/dwell-fiber-daemon --simulate`
+- **Solution 2**: Check BPF loading: `dmesg | grep -i "dwell\|ebpf" | tail -10`
+- **Solution 3**: Verify asm symlink: `ls -la /usr/include/asm`
+- **Solution 4**: Rebuild: `make clean all`
+
+**Problem**: No high-dwell events logged
+- **Solution 1**: Generate workload: `cd test && go run workload_generator.go`
+- **Solution 2**: Watch logs: `sudo tail -f /var/log/syslog | grep "High dwell"`
+- **Note**: Events < 0.1s are filtered (background noise)
+- **Note**: Events < 2s are skipped (normal operations)
+
+**Problem**: Metrics endpoint not responding
+- **Solution 1**: Check port: `netstat -tuln | grep 9090`
+- **Solution 2**: Kill existing: `pkill dwell-fiber-daemon && sleep 1`
+- **Solution 3**: Try different port: `./bin/dwell-fiber-daemon --port=9091`
+
+**Problem**: Dashboard shows 0.0 for all values
+- **Solution 1**: Run workload: `cd test && go run workload_generator.go`
+- **Solution 2**: Wait 5 seconds then refresh (F5)
+- **Solution 3**: Check metrics: `watch 'curl -s http://localhost:9090/metrics'`
+
+### Enforcement Issues
+
+**Problem**: Enforcement not triggering (no 🐌 or 💀 symbols)
+- **Check 1**: Verify thresholds: `grep -n "ThrottleThreshold\|KillThreshold" daemon/controller.go`
+  - Throttle: > 5 seconds
+  - Kill: > 15 seconds
+- **Check 2**: Generate critical workload: `cd test && go run workload_generator.go -critical=10`
+- **Check 3**: Look for `[DRY-RUN]` in logs (safe testing mode)
+
+**Problem**: Enforcement in dry-run but need real enforcement
+- **Warning**: Real enforcement throttles/kills processes - use with caution!
+- **Solution**: Add flags: `./bin/dwell-fiber-daemon --enable-enforcement --enable-killing`
+- **Test first**: Always test with `--test-enforcement` before enabling real enforcement
+
+### Coq Proof Issues
+
+**Problem**: Coq compilation errors
+- **Solution 1**: Check Coq version: `coq -v` (need 9.1+)
+- **Solution 2**: Run from coq directory: `cd coq && make verify`
+- **Solution 3**: Check for missing imports in error message
+
+**Problem**: Admitted proofs shown
+- **This is normal**: 60% of proofs complete (29/48), 40% admitted
+- **See**: `docs/coq_status.md` for detailed proof breakdown
 
 ---
 

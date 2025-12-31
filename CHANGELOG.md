@@ -149,10 +149,7 @@ git pull origin main
 
 #### Documentation
 - ✅ COQ_INSTALLATION.md - Complete installation guide
-- ✅ COQ_FIX_ANALYSIS.md - Compilation error analysis
-- ✅ COQ_RESILIENCE_STRATEGY.md - Resilience model strategy
-- ✅ COQ_RESILIENCE_IMPLEMENTATION.md - Implementation guide
-- ✅ COQ_INTEGRATION_GUIDE.md - Integration framework
+- ✅ docs/coq_integration_guide.md - Integration framework (moved from root)
 - ✅ INTEGRATION_VERIFICATION_REPORT.md - Go/Coq integration analysis
 - ✅ docs/coq-ebpf-proof-failures.md - Comprehensive verification guide
 

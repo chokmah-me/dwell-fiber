@@ -273,10 +273,182 @@ netstat -tuln | grep 9090
   run: make test
 ```
 
+---
+
+## Enforcement Testing
+
+### Overview
+
+The enforcement system has three components:
+
+1. **Throttling**: Limits process CPU to percentage (e.g., 20%) when dwell > 5s
+2. **Killing**: Terminates process when dwell > 15s (ransomware defense)
+3. **Safety Checks**: Protects critical system processes from being throttled/killed
+
+### Test Modes
+
+**Mode 1: Dry-Run Testing (Default)**
+- No actual enforcement (throttling/killing)
+- Logs what enforcement actions *would* happen
+- Safe to run on production systems
+- Best for initial validation
+
+**Mode 2: Simulation Testing**
+- Generates synthetic file access patterns
+- Tests enforcement decision-making
+- No real processes affected
+- Good for algorithm validation
+
+**Mode 3: Real Mode Testing**
+- Actually throttles processes
+- Actually kills processes
+- Requires careful setup and testing
+- For production validation
+
+### Running Enforcement Tests
+
+#### Test 1: Dry-Run Enforcement Logic (Safest)
+
+```bash
+# Build with enforcement support
+make daemon
+
+# Run with dry-run (default, no actual enforcement)
+./bin/dwell-fiber-daemon --test-enforcement
+```
+
+Expected output:
+```
+============================== ENFORCEMENT TEST ==============================
+ENFORCEMENT TEST: Idle Operations (No Enforcement)
+Description: Processes with <1s dwell should not trigger any enforcement
+[1/3] PID=3000, Dwell=0.50s -> Expected: none
+      Current stats: Throttled=0, Killed=0
+      ✅ PASS: No enforcement (as expected)
+```
+
+#### Test 2: Simulation Mode with Enforcement Logging
+
+```bash
+# Run simulation with enforcement enabled (dry-run)
+./bin/dwell-fiber-daemon --simulate
+
+# In another terminal, watch the logs
+tail -f /var/log/syslog | grep -i "throttle\|kill\|enforcement"
+
+# Or monitor metrics
+watch -n 1 'curl -s http://localhost:9090/metrics | grep dwell_fiber'
+```
+
+#### Test 3: Real Enforcement (Carefully!)
+
+⚠️ **Understand the risks**:
+- Process throttling can slow down legitimate work
+- Process killing terminates programs
+- Only run on test systems or with explicit permission
+
+**Create a test process:**
+```bash
+# Terminal 1: Create a long-running process
+cd /tmp
+yes "test data" > testfile.txt &
+TEST_PID=$!
+
+# Keep the file open for testing
+while true; do
+    cat testfile.txt > /dev/null
+    sleep 0.1
+done &
+```
+
+**Start daemon with enforcement (DRY-RUN):**
+```bash
+# This will log enforcement decisions WITHOUT actually enforcing
+./bin/dwell-fiber-daemon --simulate --enable-enforcement
+```
+
+**Enable real enforcement (DANGEROUS!):**
+```bash
+# This ACTUALLY throttles/kills processes
+./bin/dwell-fiber-daemon --simulate --enable-enforcement --enable-killing
+
+# Watch for enforcement in logs
+tail -f /var/log/syslog | grep -i "throttle\|kill"
+```
+
+### Enforcement Test Scenarios
+
+| Scenario | Dwell Time | Expected Enforcement |
+|----------|-----------|---------------------|
+| Idle Operations | < 1s | None |
+| Normal Operations | ~5s | None |
+| Throttle Threshold | 6-8s | Throttling triggered |
+| Kill Threshold | 15+s | Process killed |
+| Ransomware Pattern | 2s → 5s → 10s → 15s+ | Throttle → Kill progression |
+
+### Safety Checks
+
+Protected processes that **cannot be throttled or killed**:
+```
+init, systemd, sshd, dbus-daemon, NetworkManager, gdm, Xorg, wayland
+```
+
+To test safety:
+```bash
+# Try to enforce on init (PID=1)
+# Should see: "Safety check: Cannot enforce on protected process init"
+```
+
+### Enforcement Metrics
+
+Monitor enforcement activity:
+```bash
+curl -s http://localhost:9090/metrics | grep enforcement
+
+# Expected output:
+dwell_fiber_throttled_processes 5
+dwell_fiber_killed_processes 2
+dwell_fiber_enforcement_mode 1  # 1=enabled, 0=disabled
+```
+
+### Troubleshooting Enforcement
+
+**"Throttle failed: cannot throttle: process no longer exists"**
+- **Cause**: Simulation using fake PIDs (3000+)
+- **Solution**: This is expected in simulation mode
+- **Fix**: Use real BPF mode with actual processes
+
+**"Safety check: Cannot enforce on protected process"**
+- **Cause**: Trying to enforce on a critical system process
+- **Solution**: Use test processes, not system processes
+
+**No enforcement events logged**
+- **Cause**: Enforcement not enabled
+- **Solution**: Add `--enable-enforcement` flag
+- **Verify**: Check with `./bin/dwell-fiber-daemon --test-enforcement`
+
+### Validation Checklist
+
+- [ ] Dry-run mode shows enforcement decisions without enforcing
+- [ ] Simulation loop generates all 4 scenario types
+- [ ] Throttle threshold (5s) triggers throttling
+- [ ] Kill threshold (15s) triggers killing
+- [ ] Protected processes are never enforced
+- [ ] Price oscillates correctly
+- [ ] Metrics update in real-time
+- [ ] Dashboard shows enforcement stats
+
+---
+
 ## References
 
-- `daemon/test_suite.go` - Scenario simulation  
+- `daemon/test_suite.go` - Scenario simulation
 - `daemon/bpf_monitor.go` - BPF event processing and filtering
+- `daemon/enforcement_test.go` - Enforcement test scenarios
+- `pkg/enforcement/enforcer.go` - Enforcement implementation
+- `pkg/enforcement/throttler.go` - CPU throttling
+- `pkg/enforcement/killer.go` - Process killing
+- `pkg/enforcement/safety.go` - Safety checks
 - `test/test-suite.sh` - Integration orchestration
 - `test/workload_generator.go` - Workload creation
 - `.github/copilot-instructions.md` - Development guide

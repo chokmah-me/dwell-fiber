@@ -48,11 +48,12 @@ Core Components
 Documentation
 ──────────────
 [✓] .github/copilot-instructions.md - AI development guide
-[✓] TESTING.md - Updated with test architecture
-[✓] TEST_ARCHITECTURE.md - Detailed architecture
+[✓] TESTING.md - Complete test architecture and enforcement testing
+[✓] docs/archived/TEST_ARCHITECTURE.md - Historical session notes
+[✓] docs/installation.md - Installation with comprehensive troubleshooting
 [✓] TEST_QUICK_REFERENCE.sh - Command reference
-[✓] IMPLEMENTATION_SUMMARY.md - Implementation overview
-[✓] ARCHITECTURE_DIAGRAM.txt - Visual architecture
+[✓] docs/archived/sessions/IMPLEMENTATION_SUMMARY.md - Implementation overview
+[✓] docs/architecture_diagram.txt - Visual architecture
 
 BUILD VERIFICATION
 ═════════════════════════════════════════════════════════════════════════════
@@ -287,30 +288,14 @@ If all checks pass: ✓ READY FOR RELEASE
 TROUBLESHOOTING DURING VERIFICATION
 ═════════════════════════════════════════════════════════════════════════════
 
-If build fails:
-  1. Check symlink: ls -la /usr/include/asm
-  2. Verify dependencies: sudo apt install clang llvm libbpf-dev
-  3. Check Go version: go version (needs 1.20+)
+For comprehensive troubleshooting, see: docs/installation.md (Troubleshooting section)
 
-If daemon won't start:
-  1. Check port: netstat -tuln | grep 9090
-  2. Kill existing: pkill dwell-fiber
-  3. Try simulation: ./bin/dwell-fiber-daemon --simulate
-
-If no events logged:
-  1. Verify workload: cd test && go run workload_generator.go
-  2. Check BPF loading: dmesg | grep -i dwell
-  3. Try simulation mode first
-
-If metrics not updating:
-  1. Curl endpoint: curl http://localhost:9090/metrics
-  2. Check port: netstat -tuln | grep 9090
-  3. Check logs: tail -20 /tmp/dwell-fiber-test/daemon.log
-
-If dashboard shows zeros:
-  1. Run workload: cd test && go run workload_generator.go
-  2. Wait 5 seconds for data
-  3. Refresh page: F5
+Quick fixes:
+  Build fails → Check symlink: ls -la /usr/include/asm
+  Daemon won't start → Try simulation: ./bin/dwell-fiber-daemon --simulate
+  No events logged → Run workload: cd test && go run workload_generator.go
+  Metrics not updating → Curl endpoint: curl http://localhost:9090/metrics
+  Dashboard shows zeros → Run workload, wait 5s, refresh (F5)
 
 ═════════════════════════════════════════════════════════════════════════════
 EOF

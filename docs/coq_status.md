@@ -141,5 +141,6 @@ Total: 19 admitted
 
 For more details, see:
 - `COQ_INSTALLATION.md` - Setup guide
-- `COQ_INTEGRATION_GUIDE.md` - Proof strategies
+- `docs/coq_integration_guide.md` - Proof strategies
 - `docs/coq-ebpf-proof-failures.md` - Advanced techniques
+- `docs/archived/DEV-NOTES.md` - Historical debugging notes
