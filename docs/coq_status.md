@@ -1,9 +1,9 @@
 # Coq Formal Verification Status
 
-**Last Updated**: 2025-12-30  
-**Coq Version**: 9.1+  
-**Compilation Status**: ✅ All files compile successfully  
-**Proof Completion**: 43% (26/61 proofs complete)
+**Last Updated**: 2025-12-30
+**Coq Version**: 9.1+
+**Compilation Status**: ✅ All files compile successfully with `make verify`
+**Proof Completion**: 60% (29/48 proofs complete, 19 admitted)
 
 ---
 
@@ -15,7 +15,7 @@ Proof completion is ongoing work.
 
 **Important**: "Compilation success" ≠ "Verification complete"
 - **Compilation**: Coq syntax and type-checking passes ✅
-- **Verification**: All theorems proven with Qed (not Admitted) 🚧 43% complete
+- **Verification**: All theorems proven with Qed (not Admitted) 🚧 60% complete
 
 ---
 
@@ -23,37 +23,42 @@ Proof completion is ongoing work.
 
 | File | Total Theorems | Complete (Qed) | Admitted | Completion % |
 |------|---------------|----------------|----------|--------------|
-| **dwell_stable.v** | ~12 | 4 | 8 | ~33% |
-| **dwell_kernel_resilience.v** | 6 | 1 | 5 | ~17% |
-| **dwell_extended.v** | 8 | 1 | 7 | ~13% |
-| **test_resilience.v** | 22 | 20 | 2 | ~91% |
-| **TOTAL** | **61** | **26** | **22** | **43%** |
+| **dwell_stable.v** | 12 | 6 | 6 | 50% |
+| **dwell_kernel_resilience.v** | 7 | 3 | 4 | 43% |
+| **dwell_extended.v** | 8 | 1 | 7 | 13% |
+| **test_resilience.v** | 21 | 19 | 2 | 90% |
+| **TOTAL** | **48** | **29** | **19** | **60%** |
 
 ---
 
 ## Critical Admitted Proofs
 
-### dwell_stable.v - ADMM Stability
-- `price_nonnegative` - Price always ≥ 0
-- `price_bounded` - Price stays within bounds  
-- `convergence_to_budget` - Price converges to target
-- `stability_under_bounded_disturbance` - Stable under disturbances
+### dwell_stable.v - ADMM Stability (6 admitted)
+- ✅ `price_nonnegative` - Price always ≥ 0 (PROVEN)
+- ✅ `price_bounded` - Price stays within bounds (PROVEN)
+- `convergence_to_budget` - Price converges to target (requires Banach fixed-point)
+- `liveness_normal_mode` - Convergence in normal operation
+- `liveness_attack_mode` - Price increase under attack
+- `no_starvation` - No false positives blocking legitimate processes
+- `ransomware_detection` - Attack detection guarantee
 - `dwell_fiber_guarantees` - Bundled theorem
 
-### dwell_kernel_resilience.v - Event Loss Tolerance
+### dwell_kernel_resilience.v - Event Loss Tolerance (4 admitted)
+- ✅ `update_price_monotonic` - Monotonic price under increased dwell (PROVEN)
 - `bounded_loss_preserves_dwell_bound` - ≥(1-δ) dwell retained under loss
-- `price_update_monotonic_dwell` - Monotonic price updates
+- `price_update_monotonic_dwell` - Monotonic price updates for streams
 - `bounded_price_under_loss` - Bounded price with event loss
 - `admm_resilience_to_event_loss` - **Main resilience theorem**
 
-### dwell_extended.v - Liveness & Fairness
-- `liveness_attack_eventually_detected` - Attack detection guarantee
-- `fairness_benign_not_throttled` - Benign processes safe
-- `attack_resistance_rapid_encryption` - Detects rapid encryption
-- `safety_protected_processes_never_killed` - Protected process safety
-- `convergence_discrete_time_admm` - ADMM convergence
-- `multi_process_fairness` - Fair treatment
-- `bounded_false_positive_rate` - FP rate bounded
+### dwell_extended.v - Liveness & Fairness (7 admitted)
+- ✅ `price_nonnegative` - Price always ≥ 0 (PROVEN)
+- `liveness_normal_operation` - Normal processes eventually below threshold
+- `liveness_under_attack` - Attack processes reach enforcement thresholds
+- `no_livelock` - No infinite loops between throttle/kill thresholds
+- `fair_pricing_theorem` - Equal dwell → equal enforcement
+- `attack_detection_bounded` - Bounded time to detection
+- `enforcement_terminates` - Enforcement eventually triggers
+- `process_safety_nonempty` - Safety property (PID bounds)
 
 ---
 
@@ -74,24 +79,24 @@ Admitted proofs indicate:
 
 ## Verification Roadmap
 
-### Phase 1: Core Stability (dwell_stable.v) - 8-12 hours
-Complete ADMM stability proofs using induction, case analysis, and Lyapunov functions.
+### Phase 1: Core Stability (dwell_stable.v) - 6 remaining ✅ 50% complete
+Complete convergence proofs (requires Banach fixed-point theorem from Coq real analysis libraries).
 
-### Phase 2: Resilience Model (dwell_kernel_resilience.v) - 6-10 hours  
-Prove event loss tolerance with inequality reasoning and monotonicity proofs.
+### Phase 2: Resilience Model (dwell_kernel_resilience.v) - 4 remaining ✅ 43% complete
+Prove event loss tolerance with inequality reasoning and stream processing lemmas.
 
-### Phase 3: Extended Properties (dwell_extended.v) - 10-15 hours
+### Phase 3: Extended Properties (dwell_extended.v) - 7 remaining 🚧 13% complete
 Complete liveness, fairness, and attack resistance proofs using temporal logic.
 
-**Total Estimated Effort**: 24-37 hours
+**Total Remaining**: 17 proofs | **Estimated Effort**: 18-24 hours
 
 ---
 
 ## Production Impact
 
-**Q: Can I use Dwell-Fiber v1.4.0 in production without complete proofs?**
+**Q: Can I use Dwell-Fiber v1.4.2 in production without complete proofs?**
 
-**A: Yes.** The v1.4.0 code is:
+**A: Yes.** The v1.4.2 code is:
 - ✅ Tested with multiple workload modes
 - ✅ Enforcement verified (throttling/killing works)
 - ✅ Metrics and observability functional  
@@ -123,15 +128,16 @@ grep -c "Admitted" *.v
 
 **Current output**:
 ```
-dwell_stable.v:8
-dwell_kernel_resilience.v:5
+dwell_stable.v:6
+dwell_kernel_resilience.v:4
 dwell_extended.v:7
 test_resilience.v:2
+Total: 19 admitted
 ```
 
 ---
 
-**Status**: Framework established ✅ | Proof completion ongoing 🚧 (43%)
+**Status**: Framework established ✅ | Proof completion ongoing 🚧 (60% - 29/48 proven)
 
 For more details, see:
 - `COQ_INSTALLATION.md` - Setup guide

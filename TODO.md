@@ -1,7 +1,7 @@
 # Dwell-Fiber TODO List
 
-**Last Updated**: 2025-12-30  
-**Project Version**: v1.4.0  
+**Last Updated**: 2025-12-30
+**Project Version**: v1.4.2
 **Status**: Production-ready with ongoing enhancements
 
 ---
@@ -9,25 +9,27 @@
 ## 🔴 CRITICAL (Blockers for Next Release)
 
 ### Coq Formal Verification Completion
-**Priority: HIGH | Estimated: 24-37 hours total**
+**Priority: MEDIUM | Estimated: 18-24 hours remaining**
+**Current Status**: 60% complete (29/48 proofs), 19 admitted
 
 See `docs/coq_status.md` for detailed proof-by-proof breakdown.
 
-#### Phase 1: Core Stability Proofs (dwell_stable.v) - 8-12 hours
-- [ ] Complete `price_nonnegative` proof (straightforward induction)
-- [ ] Complete `price_increase_when_above_budget` proof (case analysis)
-- [ ] Complete `price_decrease_when_below_budget` proof (case analysis) 
-- [ ] Complete `price_bounded` proof (induction + Rmax properties)
-- [ ] Complete `convergence_to_budget` proof (Lyapunov function - HIGH difficulty)
-- [ ] Complete `stability_under_bounded_disturbance` proof
+#### Phase 1: Core Stability Proofs (dwell_stable.v) - 6 remaining
+- [x] Complete `price_nonnegative` proof ✅ PROVEN
+- [x] Complete `price_bounded` proof ✅ PROVEN
+- [ ] Complete `convergence_to_budget` proof (requires Banach fixed-point)
+- [ ] Complete `liveness_normal_mode` proof
+- [ ] Complete `liveness_attack_mode` proof
+- [ ] Complete `no_starvation` proof
+- [ ] Complete `ransomware_detection` proof
 - [ ] Complete `dwell_fiber_guarantees` bundled theorem
-- [ ] Complete `nat_ceil_correct` proof
 
-**Files**: `coq/dwell_stable.v`
+**Files**: `coq/dwell_stable.v` (50% complete)
 
-#### Phase 2: Resilience Proofs (dwell_kernel_resilience.v) - 6-10 hours
+#### Phase 2: Resilience Proofs (dwell_kernel_resilience.v) - 4 remaining
+- [x] Complete `update_price_monotonic` proof ✅ PROVEN
 - [ ] Complete `bounded_loss_preserves_dwell_bound` - ≥(1-δ) retention proof
-- [ ] Complete `price_update_monotonic_dwell` - Monotonicity proof
+- [ ] Complete `price_update_monotonic_dwell` - Stream monotonicity proof
 - [ ] Complete `bounded_price_under_loss` - Combine lemmas
 - [ ] Complete `admm_resilience_to_event_loss` - Main theorem (HIGH difficulty)
 - [ ] Complete `resilience_example` - Concrete instantiation
@@ -133,15 +135,18 @@ See `docs/coq_status.md` for detailed proof-by-proof breakdown.
 
 ## ✅ COMPLETED
 
-### v1.4.0 (December 30, 2025)
+### v1.4.2 (December 30, 2025)
+- [x] Coq proof compilation fixes (60% proofs complete - 29/48)
+- [x] README refactor (304 → 165 lines)
+- [x] Created docs/installation.md, v2-architecture.md, v3-roadmap.md
+- [x] Documentation staleness cleanup
+
+### v1.4.0-v1.4.1 (December 30, 2025)
 - [x] Repository cleanup and reorganization
-- [x] Documentation truth correction (43% proofs complete)
+- [x] Documentation truth correction
 - [x] V3 materials moved to feature branch
 - [x] Session file consolidation
 - [x] Coq status documentation created
-- [x] Coq compilation fixes (all files compile)
-- [x] Coq resilience model framework
-- [x] Documentation updates
 
 ### v1.3.0 (November 4, 2025)
 - [x] Enforcement system (throttle + kill)
