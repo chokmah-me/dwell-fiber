@@ -133,6 +133,22 @@ See [V2 Architecture - Performance](docs/v2-architecture.md#performance-measured
 
 ---
 
+## Acknowledgments
+
+Based on optimization-decomposition ideas for network architectures integrated with formal verification techniques.
+
+**Key Influences**:
+- **Doyle & Chiang (2007)** — "Layering as optimization decomposition: A mathematical theory of network architectures"
+- **Dave Aitel (2016)** — "Dwell Time" concept for intrusion detection
+- **Daniel Miessler** — Unsupervised Learning Newsletter (security insights)
+
+**Techniques**:
+- ADMM optimization (Boyd et al., 2010)
+- eBPF CO-RE (Compile Once, Run Everywhere)
+- Coq formal verification framework
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for:
