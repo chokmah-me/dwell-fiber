@@ -11,6 +11,9 @@
   produce distinct dwell events. See `CHANGELOG.md`.
 - **Benchmark harness** (v1.5.0): `test/bench.py` runs benign (tar extract)
   and sustained-dwell-attack scenarios; results in `BENCHMARKS.md`.
+- **Unit tests** (`daemon/controller_test.go`): 6 tests cover ADMM math
+  (average-dwell calculation, price update formula, Lemma 3 non-negativity,
+  state return). Run with `make test`. Scheduled to run weekly via GitHub Actions.
 
 ## Frozen
 

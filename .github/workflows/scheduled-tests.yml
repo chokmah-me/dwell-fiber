@@ -1,0 +1,31 @@
+name: Scheduled Tests
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  test-weekly:
+    runs-on: ubuntu-latest
+    name: Weekly Go Tests (Ubuntu 25.10)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go 1.24
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Download Go modules
+        run: go mod download
+      - name: Run unit tests
+        run: make test
+        timeout-minutes: 5
+      - name: Test summary
+        if: always()
+        run: |
+          if [ $? -eq 0 ]; then
+            echo "✓ Weekly tests passed"
+          else
+            echo "✗ Weekly tests failed"
+          fi

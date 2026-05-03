@@ -31,7 +31,7 @@ Dwell-Fiber prevents ransomware by monitoring file access patterns and applying 
 ### Installation
 
 ```bash
-git clone https://github.com/dyb5784/dwell-fiber.git
+git clone https://github.com/chokmah-me/dwell-fiber.git
 cd dwell-fiber
 make all
 ```
@@ -109,8 +109,17 @@ dwell-fiber/
 ├── coq/                  # Formal verification (Coq proofs)
 ├── dashboard/            # Web UI
 ├── docs/                 # Documentation
-└── tests/                # Integration tests
+└── test/                 # Integration and unit tests
 ```
+
+### Testing
+
+Run unit tests locally:
+```bash
+make test  # cd daemon && go test -v ./...
+```
+
+Scheduled tests run weekly via GitHub Actions. See `.github/workflows/` for CI configuration.
 
 ---
 

@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Unit tests for ADMM controller (`daemon/controller_test.go`): 6 tests covering
+  average-dwell calculation, price update formula, Lemma 3 non-negativity, and state return.
+  Tests run with `make test`.
+- Scheduled GitHub Actions workflow (`scheduled-tests.yml`): weekly test run every Monday
+  at 06:00 UTC. Can be triggered manually via `workflow_dispatch`.
+
 ## [1.5.0] - 2026-05
 
 ### Fixed
