@@ -177,10 +177,11 @@ MIT License - See [LICENSE](LICENSE)
 
 ```bibtex
 @software{dwell_fiber_2025,
-  title={Dwell-Fiber: ADMM-Based Ransomware Defense},
-  author={Your Name},
+  title={Dwell-Fiber: Formally-Verified Ransomware Defense},
+  author={Daniyel Yaacov Bilar},
   year={2025},
-  url={https://github.com/dyb5784/dwell-fiber}
+  version={v1.5.0},
+  url={https://github.com/chokmah-me/dwell-fiber}
 }
 ```
 

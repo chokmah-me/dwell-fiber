@@ -1,21 +1,20 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using these metadata."
 title: "Dwell-Fiber: Formally-Verified Ransomware Defense"
-abstract: "A minimal, end-to-end prototype that turns the Network-Utility-Maximisation (NUM) fibre-bundle model of compiler passes into runnable eBPF/LLVM/K8s artefacts."
+abstract: "eBPF-based ransomware defense using ADMM economic enforcement. Monitors file dwell time, throttles/kills over-budget processes. Formally verified in Coq (29/48 proofs complete). Runs on Ubuntu 25.10 with kernel 5.8+."
 type: software
 authors:
   - family-names: "Bilar"
     given-names: "Daniyel Yaacov"
-version: "v0.1.0-alpha.1"
-date-released: "2025-10-30"
-notes: "Code has not yet been tested on Linux by the author as of 2025-10-30. Follow the Quick Start instructions (WSL or VirtualBox/Ubuntu) in README.md to build and test before use."
+version: "v1.5.0"
+date-released: "2026-05-03"
 repository-code: "https://github.com/chokmah-me/dwell-fiber"
 keywords:
-  - "compiler optimization"
-  - "formal verification"
   - "ransomware defense"
   - "ebpf"
-  - "kubernetes"
+  - "admm"
+  - "formal verification"
+  - "coq"
 references:
   - type: article
     title: "Layering as optimization decomposition: A mathematical theory of network architectures"
