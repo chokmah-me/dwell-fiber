@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git ls-tree:*)"
+      "Bash(git ls-tree:*)",
+      "Bash(patch -p1)",
+      "Bash(rm CITATION.bibtex.patch CITATION.cff.patch README.md.patch loader.go.patch apply_v1.5.0.sh migrate_urls.sh CHANGELOG_v1.5.0_entry.md)",
+      "Bash(ls *.patch *.sh CHANGELOG_v1.5.0_entry.md)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

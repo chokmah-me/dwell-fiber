@@ -29,12 +29,28 @@ struct dwell_value {
     __u32 access_count;
 };
 
+/* Pending open: keyed by (pid, tgid) so concurrent opens in the same
+ * thread are serialized by the kernel (a thread cannot have two openats
+ * in flight). We move the entry to the real (pid, fd) key on sys_exit_openat
+ * once the fd is known. */
+struct pending_open_value {
+    __u64 open_time;
+    __u32 tgid;
+};
+
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, MAX_ENTRIES);
     __type(key, struct dwell_key);
     __type(value, struct dwell_value);
 } dwell_tracker SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, __u64);   /* pid_tgid */
+    __type(value, struct pending_open_value);
+} pending_opens SEC(".maps");
 
 // Track last activity per PID for cleanup
 struct {
@@ -54,26 +70,57 @@ int handle_openat_enter(void *ctx) {
     __u64 pid_tgid = bpf_get_current_pid_tgid();
     __u32 pid = pid_tgid >> 32;
     __u64 now = bpf_ktime_get_ns();
-    
-    // Record activity for this PID (used for cleanup)
+
     bpf_map_update_elem(&pid_activity, &pid, &now, BPF_ANY);
-    
-    // Note: File descriptor and inode are not yet available at sys_enter_openat
-    // They will be available at sys_exit_openat (not yet tracked)
-    // For now, track with placeholder FD=0 to avoid data loss
-    
+
+    /* The fd is the syscall return value, not available until sys_exit_openat.
+     * Stash the open timestamp keyed by pid_tgid; promote to (pid, fd) on exit. */
+    struct pending_open_value pending = {
+        .open_time = now,
+        .tgid = (__u32)(pid_tgid & 0xFFFFFFFF),
+    };
+    bpf_map_update_elem(&pending_opens, &pid_tgid, &pending, BPF_ANY);
+    return 0;
+}
+
+/* Tracepoint format for sys_exit_openat exposes the return value (fd or -errno)
+ * at a fixed offset. Using the BPF tracepoint context struct keeps this CO-RE-friendly. */
+struct trace_event_raw_sys_exit {
+    unsigned long long unused;
+    long id;
+    long ret;
+};
+
+SEC("tracepoint/syscalls/sys_exit_openat")
+int handle_openat_exit(struct trace_event_raw_sys_exit *ctx) {
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    __u32 pid = pid_tgid >> 32;
+    long ret = ctx->ret;
+
+    struct pending_open_value *pending = bpf_map_lookup_elem(&pending_opens, &pid_tgid);
+    if (!pending) {
+        return 0;
+    }
+
+    /* Always remove the pending entry; on failure we don't promote it. */
+    if (ret < 0) {
+        bpf_map_delete_elem(&pending_opens, &pid_tgid);
+        return 0;
+    }
+
     struct dwell_key key = {
         .pid = pid,
-        .fd = 0,  // Will be filled at exit handler with real FD
+        .fd = (__u32)ret,
     };
-    
+
     struct dwell_value value = {
-        .open_time = now,
-        .inode = 0,  // Will be filled when inode becomes available
+        .open_time = pending->open_time,
+        .inode = 0,
         .access_count = 1,
     };
-    
+
     bpf_map_update_elem(&dwell_tracker, &key, &value, BPF_ANY);
+    bpf_map_delete_elem(&pending_opens, &pid_tgid);
     return 0;
 }
 
@@ -82,49 +129,49 @@ int handle_close_enter(void *ctx) {
     __u64 pid_tgid = bpf_get_current_pid_tgid();
     __u32 pid = pid_tgid >> 32;
     __u64 now = bpf_ktime_get_ns();
-    
-    // Update activity tracking
+
     bpf_map_update_elem(&pid_activity, &pid, &now, BPF_ANY);
-    
-    // Try to find entry by FD
-    // Note: sys_enter_close only has FD number, not inode
-    // A full implementation would need to correlate FD→inode via kernel data structures
-    
-    // For now, iterate to find matching entry (will be one per PID for open ops)
+
+    /* sys_enter_close passes fd as its first argument. Read it from the
+     * tracepoint context. The format is:
+     *   field:int __syscall_nr; offset 8
+     *   field:unsigned int fd;  offset 16
+     */
+    __u32 fd = 0;
+    bpf_probe_read_kernel(&fd, sizeof(fd), (char *)ctx + 16);
+
     struct dwell_key key = {
         .pid = pid,
-        .fd = 0,  // Match the entry created in handle_openat_enter
+        .fd = fd,
     };
-    
+
     struct dwell_value *value = bpf_map_lookup_elem(&dwell_tracker, &key);
     if (!value) {
-        // Entry not found - may have already been processed or process crashed
         return 0;
     }
-    
-    // Filter out noise: only report dwell > 100ms
+
     __u64 duration = now - value->open_time;
-    if (duration < 100000000) {  // 100ms in nanoseconds
+    if (duration < 100000000) {  /* 100ms */
         bpf_map_delete_elem(&dwell_tracker, &key);
         return 0;
     }
-    
-    struct dwell_event *event = bpf_ringbuf_reserve(&events, 
+
+    struct dwell_event *event = bpf_ringbuf_reserve(&events,
                                                      sizeof(*event), 0);
     if (!event) {
         return 0;
     }
-    
+
     event->pid = pid;
     event->tid = (__u32)pid_tgid;
     event->inode = value->inode;
     event->duration_ns = duration;
     event->timestamp = now;
     bpf_get_current_comm(&event->comm, sizeof(event->comm));
-    
+
     bpf_ringbuf_submit(event, 0);
     bpf_map_delete_elem(&dwell_tracker, &key);
-    
+
     return 0;
 }
 
