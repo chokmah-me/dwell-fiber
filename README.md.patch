@@ -1,0 +1,47 @@
+--- a/README.md
++++ b/README.md
+@@ -8,11 +8,11 @@
+ [![Version: v1.4.2](https://img.shields.io/badge/Version-v1.4.2-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.4.2)
+ [![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/dyb5784/dwell-fiber)
+ 
+-## ✅ Current Status: v1.4.2 - Coq Proof Compilation Fixed
++## Current status
+ 
+-**Latest Release**: v1.4.2 (December 30, 2025)
+-
+-All Coq proofs compile successfully with `make verify` - 29/48 proofs complete (60%), full verification build working.
++v1.5.0 ships a correctness fix for concurrent file-descriptor tracking
++and a benchmark harness with empirical results. See [STATUS.md](STATUS.md)
++for what's working, what's frozen, and what isn't happening.
+ 
+ ---
+ 
+@@ -53,18 +53,16 @@
+ 
+ ---
+ 
+-## Features
++## Scope
+ 
+-### V2.x (Production)
+-- ✅ Real-time eBPF-based file dwell tracking
+-- ✅ ADMM economic enforcement (throttle + kill)
+-- ✅ Prometheus metrics + web dashboard
+-- ✅ Formal verification framework (60% proven)
+-- ✅ Sub-millisecond latency impact
++**V2.x (current):** real-time eBPF dwell tracking, ADMM economic enforcement
++(throttle via cgroups v2; kill via SIGTERM/SIGKILL), Prometheus metrics, web
++dashboard. Catches sustained-dwell attack patterns. See `BENCHMARKS.md` for
++measured behavior.
+ 
+-### V3.0 (Planned)
+-- 🚧 Rate-based detection (TBW + UFM metrics)
+-- 🚧 Tier classification (T1/T1.5/T2 budgets)
+-- 🚧 Defeats LockBit 3.0 intermittent encryption
++**Known gap:** V2 cannot catch fast intermittent encryption (LockBit 3.0
++pattern: <100ms dwell per file across thousands of files). The V3.0 WIP-based
++architecture explores a fix and is research-in-progress on the
++`feature/v3-wip-architecture` branch. See [docs/v3-roadmap.md](docs/v3-roadmap.md).
++No timeline.
+ 
+ ---

@@ -1,0 +1,11 @@
+--- a/CITATION.cff
++++ b/CITATION.cff
+@@ -10,7 +10,7 @@ authors:
+ version: "v0.1.0-alpha.1"
+ date-released: "2025-10-30"
+ notes: "Code has not yet been tested on Linux by the author as of 2025-10-30. Follow the Quick Start instructions (WSL or VirtualBox/Ubuntu) in README.md to build and test before use."
+-repository-code: "https://github.com/dyb5784/dwell-fiber"
++repository-code: "https://github.com/chokmah-me/dwell-fiber"
+ keywords:
+   - "compiler optimization"
+   - "formal verification"
