@@ -44,7 +44,7 @@ The system's core is a compact 300-line implementation that demonstrates the "sa
 ### Basic Build
 ```bash
 # Clone the repo
-git clone https://github.com/dyb5784/dwell-fiber.git
+git clone https://github.com/chokmah-me/dwell-fiber.git
 cd dwell-fiber
 
 # Fix asm/types.h symlink (critical first step!)

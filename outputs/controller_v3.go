@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dyb5784/dwell-fiber/pkg/enforcement"
+	"github.com/chokmah-me/dwell-fiber/pkg/enforcement"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

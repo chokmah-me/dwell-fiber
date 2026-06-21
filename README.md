@@ -5,8 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 9.1+](https://img.shields.io/badge/Coq-9.1%2B-blue.svg)](https://coq.inria.fr/)
-[![Version: v1.5.0](https://img.shields.io/badge/Version-v1.5.0-green.svg)](https://github.com/dyb5784/dwell-fiber/releases/tag/v1.5.0)
-[![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/dyb5784/dwell-fiber)
+[![Version: v1.5.0](https://img.shields.io/badge/Version-v1.5.0-green.svg)](https://github.com/chokmah-me/dwell-fiber/releases/tag/v1.5.0)
+[![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/chokmah-me/dwell-fiber)
 
 ## Current status
 
@@ -75,9 +75,9 @@ measured behavior.
 
 **Known gap:** V2 cannot catch fast intermittent encryption (LockBit 3.0
 pattern: <100ms dwell per file across thousands of files). The V3.0 WIP-based
-architecture explores a fix and is research-in-progress on the
-`feature/v3-wip-architecture` branch. See [docs/v3-roadmap.md](docs/v3-roadmap.md).
-No timeline.
+architecture explores a fix and is research-in-progress: unintegrated drafts
+in `outputs/`, preserved at tags `v3.0.0`–`v3.0.2`. See
+[docs/v3-roadmap.md](docs/v3-roadmap.md). No timeline.
 
 ---
 
@@ -187,4 +187,4 @@ MIT License - See [LICENSE](LICENSE)
 
 ---
 
-**Questions?** Open an [issue](https://github.com/dyb5784/dwell-fiber/issues) or see [docs/](docs/)
+**Questions?** Open an [issue](https://github.com/chokmah-me/dwell-fiber/issues) or see [docs/](docs/)

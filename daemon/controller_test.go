@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dyb5784/dwell-fiber/pkg/enforcement"
+	"github.com/chokmah-me/dwell-fiber/pkg/enforcement"
 )
 
 // newTestController creates a Controller for testing without Prometheus registration.

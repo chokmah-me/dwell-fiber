@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/dyb5784/dwell-fiber/pkg/bpf"
+	"github.com/chokmah-me/dwell-fiber/pkg/bpf"
 )
 
 // BPFMonitor wraps the BPF manager and connects events to the controller

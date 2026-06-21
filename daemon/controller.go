@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dyb5784/dwell-fiber/pkg/enforcement"
+	"github.com/chokmah-me/dwell-fiber/pkg/enforcement"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -115,9 +115,9 @@ func (c *Controller) HandleCloseEvent(pid int, cmd string, dwell time.Duration) 
 	dwellSeconds := dwell.Seconds()
 	c.recentDwells = append(c.recentDwells, dwellSeconds)
 
-	// Keep only recent measurements - THIS IS KEY: limit to last 10 events
+	// Keep only recent measurements - THIS IS KEY: limit to last maxRecent events
 	// This makes the average responsive to recent changes
-	if len(c.recentDwells) > 10 {
+	if len(c.recentDwells) > c.maxRecent {
 		c.recentDwells = c.recentDwells[1:]
 	}
 
