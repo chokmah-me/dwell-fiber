@@ -2,10 +2,11 @@
 """
 Dwell-Fiber v1.5.0 benchmark harness.
 
-Two scenarios, one results table. No frameworks. No magic.
+Three scenarios, one results table. No frameworks. No magic.
 
-  benign  : extract a 100MB tar of small files (real workload, short dwells)
-  attack  : 100 files held open 8s each, random-byte writes (sustained dwell)
+  benign       : extract a 100MB tar of small files (real workload, short dwells)
+  attack       : 100 files held open 8s each, random-byte writes (sustained dwell)
+  intermittent : 2000 files, open->write 1MB->close each (LockBit-style, <100ms dwell)
 
 For each run we scrape /metrics before+after and report the deltas.
 Run ./bin/dwell-fiber-daemon with --enable-enforcement in another terminal first.
@@ -13,7 +14,9 @@ Run ./bin/dwell-fiber-daemon with --enable-enforcement in another terminal first
 Usage:
     python3 test/bench.py --scenario benign
     python3 test/bench.py --scenario attack
-    python3 test/bench.py --scenario both --out BENCHMARKS.md
+    python3 test/bench.py --scenario intermittent
+    python3 test/bench.py --scenario both --out BENCHMARKS.md   # benign + attack
+    python3 test/bench.py --scenario all  --out BENCHMARKS.md   # + intermittent
 """
 import argparse
 import os
@@ -118,6 +121,36 @@ def run_attack(workdir: Path, n_files: int = 100, hold_s: float = 8.0) -> dict:
     return {"scenario": "attack", "elapsed_s": elapsed, "before": before, "after": after}
 
 
+def run_intermittent(workdir: Path, n_files: int = 2000,
+                     chunk_bytes: int = 1_048_576) -> dict:
+    """Open N files, write a 1MB chunk, close immediately. Repeat.
+    This is the LockBit 3.0+ fast-intermittent-encryption pattern: each file
+    session is <100ms dwell, well below the 5s budget, so V2.x dwell tracking
+    never raises the price. The blind spot, made measurable."""
+    target = workdir / "intermittent_out"
+    target.mkdir(exist_ok=True)
+
+    before = scrape()
+    print(f"[intermittent] before: {before}")
+    print(f"[intermittent] writing {n_files} files, {chunk_bytes} bytes each, "
+          "open->write->close (no hold)...")
+    t0 = time.time()
+    for i in range(n_files):
+        path = target / f"victim_{i:05d}.dat"
+        with open(path, "wb") as f:
+            f.write(os.urandom(chunk_bytes))
+            f.flush()
+        # No sleep: short dwell is the whole point.
+        if i % 200 == 0:
+            print(f"  ... {i}/{n_files}")
+    elapsed = time.time() - t0
+    time.sleep(3)
+    after = scrape()
+    print(f"[intermittent] after:  {after}")
+    return {"scenario": "intermittent", "elapsed_s": elapsed,
+            "before": before, "after": after}
+
+
 def fmt_row(r: dict) -> str:
     b = r["before"]
     a = r["after"]
@@ -165,14 +198,21 @@ def write_md(results, out: Path):
         "Price climbs, throttle/kill counters should increment with",
         "`--enable-enforcement --enable-killing`.",
         "",
-        "## Known gap",
+        "**Intermittent** (2000 files, open->write 1MB->close, no hold): the",
+        "LockBit 3.0+ fast-intermittent-encryption pattern. Each file session is",
+        "<100ms dwell, far below the 5s budget, so the ADMM price stays near zero",
+        "and NO enforcement fires -- even though thousands of files were rewritten.",
+        "Price ~0 and killed=0 on this row is the V2.x blind spot, now measured",
+        "rather than asserted.",
         "",
-        "This harness deliberately does NOT cover fast intermittent encryption",
-        "(LockBit 3.0 pattern: <100ms dwell per file across thousands of files).",
-        "V2.x will not catch that pattern; the V3.0 WIP-based architecture is",
-        "research-in-progress (unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2).",
-        "Adding an intermittent-encryption scenario to this harness is the",
-        "first follow-up after v1.5.0.",
+        "## The measured gap",
+        "",
+        "V2.x tracks dwell *latency*, not write *rate*, so fast intermittent",
+        "encryption slips under the budget (see the `intermittent` row above).",
+        "The V3.0 WIP-based (rate) architecture is research-in-progress",
+        "(unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2). This",
+        "`intermittent` row is the regression baseline any future V3 work must",
+        "flip from price~0/killed=0 to detection.",
         "",
     ]
     out.write_text("\n".join(lines))
@@ -181,17 +221,21 @@ def write_md(results, out: Path):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--scenario", choices=("benign", "attack", "both"), default="both")
+    p.add_argument("--scenario",
+                   choices=("benign", "attack", "intermittent", "both", "all"),
+                   default="both")
     p.add_argument("--out", type=Path, default=Path("BENCHMARKS.md"))
     p.add_argument("--workdir", type=Path, default=Path("/tmp/dwell-fiber-bench"))
     args = p.parse_args()
 
     args.workdir.mkdir(parents=True, exist_ok=True)
     results = []
-    if args.scenario in ("benign", "both"):
+    if args.scenario in ("benign", "both", "all"):
         results.append(run_benign(args.workdir))
-    if args.scenario in ("attack", "both"):
+    if args.scenario in ("attack", "both", "all"):
         results.append(run_attack(args.workdir))
+    if args.scenario in ("intermittent", "all"):
+        results.append(run_intermittent(args.workdir))
 
     if not scrape():
         print("[err] daemon /metrics not reachable. Start the daemon first.",
