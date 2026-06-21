@@ -17,7 +17,8 @@
 
 ## Frozen
 
-- **V3.0 WIP-based architecture**: drafts on branch `feature/v3-wip-architecture`.
+- **V3.0 WIP-based architecture**: drafts in `outputs/` (tracked on `main`),
+  preserved at tags `v3.0.0`–`v3.0.2`. There is no active V3 branch.
   Motivated by V2's blind spot for fast intermittent encryption (LockBit 3.0+).
   Not actively developed. The eBPF and Go drafts in `outputs/` are
   unintegrated; tier weights are unvalidated. See `docs/v3-roadmap.md`.

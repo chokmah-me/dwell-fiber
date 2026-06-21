@@ -170,7 +170,7 @@ def write_md(results, out: Path):
         "This harness deliberately does NOT cover fast intermittent encryption",
         "(LockBit 3.0 pattern: <100ms dwell per file across thousands of files).",
         "V2.x will not catch that pattern; the V3.0 WIP-based architecture is",
-        "research-in-progress on the `feature/v3-wip-architecture` branch.",
+        "research-in-progress (unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2).",
         "Adding an intermittent-encryption scenario to this harness is the",
         "first follow-up after v1.5.0.",
         "",

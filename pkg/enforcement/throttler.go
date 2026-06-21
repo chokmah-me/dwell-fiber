@@ -110,14 +110,6 @@ func (t *Throttler) throttleNice(pid int) error {
 	return t.renicePID(pid, 10)
 }
 
-// renicePID sets process nice value via syscall
-// On Linux: uses syscall.Setpriority
-// This function is platform-specific (see throttler_unix.go for implementation)
-func (t *Throttler) renicePID(pid, niceValue int) error {
-	// Placeholder - implementation in platform-specific file
-	return fmt.Errorf("renice not implemented for this platform")
-}
-
 // CleanupThrottled removes stale entries
 func (t *Throttler) CleanupThrottled() {
 	for pid, throttleTime := range t.throttled {

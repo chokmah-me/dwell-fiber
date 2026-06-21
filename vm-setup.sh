@@ -50,7 +50,7 @@ fi
 # Step 4: Clone or update repo
 echo -e "\n${YELLOW}[4/6] Cloning/updating dwell-fiber repository...${NC}"
 if [ ! -d dwell-fiber ]; then
-    git clone https://github.com/dyb5784/dwell-fiber.git
+    git clone https://github.com/chokmah-me/dwell-fiber.git
     cd dwell-fiber
     echo -e "${GREEN}✓ Repository cloned${NC}"
 else

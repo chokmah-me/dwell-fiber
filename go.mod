@@ -1,4 +1,4 @@
-module github.com/dyb5784/dwell-fiber
+module github.com/chokmah-me/dwell-fiber
 
 go 1.23.0
 

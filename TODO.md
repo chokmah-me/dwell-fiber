@@ -126,8 +126,8 @@ See `docs/coq_status.md` for detailed proof-by-proof breakdown.
 
 ### V3.0 WIP Architecture
 
-**Status**: See feature branch `feature/v3-wip-architecture`  
-**Checklist**: See `V3_MIGRATION_STATUS.md` on that branch  
+**Status**: Unintegrated drafts in `outputs/`, preserved at tags `v3.0.0`–`v3.0.2` (no active branch)  
+**Checklist**: See `docs/v3-roadmap.md`  
 **Estimated**: 21-33 hours  
 **Priority**: Deferred until v1.5.0 complete
 
@@ -174,5 +174,5 @@ See `docs/coq_status.md` for detailed proof-by-proof breakdown.
 
 ---
 
-**Maintainer**: [@dyb5784](https://github.com/dyb5784)  
+**Maintainer**: [@chokmah-me](https://github.com/chokmah-me)  
 **Last Review**: 2025-12-30

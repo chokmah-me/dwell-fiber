@@ -41,7 +41,7 @@ sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
 ### Clone Repository
 
 ```bash
-git clone https://github.com/dyb5784/dwell-fiber.git
+git clone https://github.com/chokmah-me/dwell-fiber.git
 cd dwell-fiber
 ```
 

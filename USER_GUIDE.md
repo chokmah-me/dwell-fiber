@@ -64,7 +64,7 @@ If you don't have Linux, you can:
 
 ```bash
 # Clone the project
-git clone https://github.com/dyb5784/dwell-fiber.git
+git clone https://github.com/chokmah-me/dwell-fiber.git
 cd dwell-fiber
 
 # Build everything (takes ~30 seconds)
@@ -315,7 +315,7 @@ sudo ./bin/dwell-fiber-daemon --enable-enforcement --budget=5.0
 ### Where to Find Information
 
 - 📖 **Full docs**: `docs/architecture.md`, `docs/overview.md`
-- 🐛 **Report bugs**: `https://github.com/dyb5784/dwell-fiber/issues`
+- 🐛 **Report bugs**: `https://github.com/chokmah-me/dwell-fiber/issues`
 - 📧 **Email maintainer**: See GitHub profile
 - 💬 **Community**: Discussion board (coming soon)
 

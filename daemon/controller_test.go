@@ -3,17 +3,21 @@ package main
 import (
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/dyb5784/dwell-fiber/pkg/enforcement"
+	"github.com/chokmah-me/dwell-fiber/pkg/enforcement"
 )
 
 // newTestController creates a Controller for testing without Prometheus registration.
-// Constructs the struct directly to avoid MustRegister panics.
+// Constructs the struct directly to avoid MustRegister panics. Mirrors the
+// defaults NewController sets (scenario, lastUpdate) so GetState behaves the same.
 func newTestController(alpha, budget, initPrice float64) *Controller {
 	return &Controller{
 		Alpha:        alpha,
 		Budget:       budget,
 		currentPrice: initPrice,
+		lastUpdate:   time.Now(),
+		scenario:     "real-bpf",
 		mu:           sync.RWMutex{},
 		recentDwells: make([]float64, 0),
 		maxRecent:    10,

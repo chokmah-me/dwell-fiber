@@ -1,4 +1,5 @@
-COQC := /c/Coq-Platform~8.19~2024.10/bin/coqc
+# Use coqc from PATH by default; override with `make COQC=/path/to/coqc`.
+COQC ?= coqc
 COQFLAGS := -R . DwellFiber
 
 VFILES := dwell_stable.v dwell_kernel_resilience.v dwell_extended.v

@@ -96,7 +96,7 @@ sudo ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include/asm
 ## Common Gotchas
 
 - **Root privileges**: Required for eBPF loading and process enforcement
-- **Go module path**: Use `github.com/dyb5784/dwell-fiber` in imports
+- **Go module path**: Use `github.com/chokmah-me/dwell-fiber` in imports
 - **Concurrent access**: Always use controller mutex when accessing price state
 - **Process safety**: Enforcement whitelist prevents killing essential processes
 - **Ring buffer**: Events may be dropped under high load - implement backpressure

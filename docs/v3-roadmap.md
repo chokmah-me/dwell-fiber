@@ -1,6 +1,6 @@
 # V3.0 Roadmap - WIP-Based Architecture
 
-**Status**: 🚧 **Experimental** - On feature branch `feature/v3-wip-architecture`
+**Status**: 🚧 **Experimental** - Unintegrated drafts in `outputs/`, preserved at tags `v3.0.0`–`v3.0.2` (no active branch)
 
 V3.0 replaces dwell-time tracking with **rate-based I/O pressure** detection to catch fast intermittent ransomware attacks.
 
@@ -333,7 +333,7 @@ sudo ./bin/dwell-fiber-daemon \
 
 **Try V3.0 (Experimental)**:
 ```bash
-git checkout feature/v3-wip-architecture
+git checkout v3.0.2   # V3 drafts are preserved at tags v3.0.0–v3.0.2
 cd dwell-fiber
 make all
 sudo ./bin/dwell-fiber-daemon --use-v3-wip
