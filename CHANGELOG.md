@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **V3 WIP enforcement** (`--v3-enforce` / `--v3-enable-killing`, #10). Makes
+  `--use-v3-wip` act on the rate-based signal, keeping V2's conservative posture:
+  enforcement is opt-in and **dry-run by default** (logs the action it *would*
+  take), with killing behind a separate gate that is ignored without
+  `--v3-enforce`. High-pressure PIDs are I/O-throttled via cgroups v2 `io.max`
+  (`pkg/enforcement` `Throttler.ThrottleIO` / `throttleIOCgroupV2`, in a
+  `dwell-fiber-v3.slice`, with a CPU-throttle fallback), then killed past
+  `V3KillPrice` (reusing the V2 `Killer` via the new shared `KillNow`).
+  `Enforcer.EnforceWIP` keys decisions off the V3 ADMM price and reuses the V2
+  `SafetyChecker` whitelists. New metrics `dwell_fiber_v3_throttled_count` /
+  `dwell_fiber_v3_killed_count`. **Threshold note:** `V3ThrottlePrice` (50),
+  `V3KillPrice` (150), and the tier budgets are documented *starting points*,
+  not yet calibrated — the regression gate is `bench.py` (benign/tar must stay
+  below `V3ThrottlePrice` while `intermittent` clears it); re-tune on the VM
+  before trusting live enforcement.
+- **V3 price decay** (`ControllerV3.Leak`, default 0.9, #10). The V3 ADMM price
+  now leaks each window, so a transient benign burst bleeds off instead of
+  latching into enforcement range — only *sustained* high WIP enforces.
+- **In-kernel write filtering** (`bpf/dwell_monitor.bpf.c`, #10).
+  `handle_write_enter` now skips sub-page writes (`count < 4096`) and is
+  lookup-only (a PID's WIP window is created solely by the openat hook), so pure
+  socket/pipe/stdout writers never allocate one. Removes the ~4x system-wide
+  overhead that made write tracking too costly to leave armed for enforcement.
 - **V3 WIP observation mode** (`--use-v3-wip`, `daemon/controller_v3.go`,
   `daemon/wip_monitor.go`, `bpf/dwell_monitor.bpf.c`). A rate-based Weighted I/O
   Pressure detector that runs in parallel with V2 (roadmap "dual mode") in
@@ -15,8 +38,9 @@ All notable changes to this project are documented in this file.
   detecting. Signals are derived from syscall tracepoints (TBW from
   `sys_enter_write`; UFM is an opens/s proxy) rather than the stubbed
   `kprobe/vfs_write` draft, so no CO-RE/vmlinux.h build change is needed.
-  Tier-weight/budget calibration, true unique-inode UFM, and enforcement
-  (cgroups v2 `io.max`) are deferred to a later phase.
+  Enforcement (cgroups v2 `io.max` throttle + kill) and price decay landed in
+  the follow-up enforcement phase above (#10); tier-weight/budget calibration
+  and true unique-inode UFM (needs CO-RE/vmlinux.h) remain deferred.
 
 ### Fixed
 - **Event counters are now truly pre-filter** (`bpf/dwell_monitor.bpf.c`,
