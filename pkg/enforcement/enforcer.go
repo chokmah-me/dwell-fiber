@@ -45,6 +45,35 @@ func (e *Enforcer) Enforce(pid int, cmd string, dwell time.Duration) error {
 	return nil
 }
 
+// EnforceWIP applies enforcement based on the V3 rate-based ADMM price rather
+// than a dwell duration. Mirrors Enforce: kill above V3KillPrice, else io.max
+// throttle above V3ThrottlePrice. Dry-run (config.Enabled / KillEnabled) and
+// safety gating are handled by the killer/throttler, so when those flags are off
+// this only logs the action it *would* take.
+func (e *Enforcer) EnforceWIP(pid int, cmd string, price float64) error {
+	if price >= e.config.V3KillPrice {
+		if err := e.killer.KillNow(pid, cmd, fmt.Sprintf("v3 price=%.0f", price)); err != nil {
+			fmt.Printf("⚠️  V3 kill failed: %v\n", err)
+		}
+		return nil
+	}
+
+	if price >= e.config.V3ThrottlePrice {
+		// Throttle only takes kernel action when enforcement is enabled; otherwise
+		// log the intent so dry-run still shows what would happen.
+		if !e.config.Enabled {
+			fmt.Printf("🐌 [DRY-RUN] Would io-throttle PID=%d (%s) v3 price=%.0f\n", pid, cmd, price)
+			return nil
+		}
+		if err := e.throttler.ThrottleIO(pid, cmd, fmt.Sprintf("v3 price=%.0f", price)); err != nil {
+			fmt.Printf("⚠️  V3 throttle failed: %v\n", err)
+		}
+		return nil
+	}
+
+	return nil
+}
+
 // Cleanup removes stale tracking data
 func (e *Enforcer) Cleanup() {
 	e.throttler.CleanupThrottled()

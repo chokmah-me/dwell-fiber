@@ -256,12 +256,26 @@ SEC("tracepoint/syscalls/sys_enter_write")
 int handle_write_enter(void *ctx) {
     __u64 pid_tgid = bpf_get_current_pid_tgid();
     __u32 pid = pid_tgid >> 32;
-    __u64 now = bpf_ktime_get_ns();
 
     __u64 count = 0;
     bpf_probe_read_kernel(&count, sizeof(count), (char *)ctx + 32);
 
-    struct wip_state *wst = wip_get(pid, now);
+    /* In-kernel filtering: this tracepoint fires on EVERY write syscall
+     * system-wide (sockets, pipes, stdout, ...), so an unconditional
+     * lookup-or-create here is what made --use-v3-wip ~4x slower. Two cheap
+     * filters keep enforcement-mode overhead bounded:
+     *   1. Skip sub-page writes -- ransomware/bulk I/O writes in >=page chunks;
+     *      tiny logging/control writes are noise for a TBW rate signal.
+     *   2. Lookup only (no create): a PID accrues TBW only once it has a window,
+     *      and windows are created exclusively by the openat hook. A process that
+     *      never opens a regular file (pure socket/pipe writer) never allocates
+     *      one, so the hot path is a single failed map lookup. */
+    if (count < 4096) {
+        return 0;
+    }
+
+    __u32 key = pid;
+    struct wip_state *wst = bpf_map_lookup_elem(&wip_tracker, &key);
     if (wst) {
         wst->tbw_accum += count;
     }

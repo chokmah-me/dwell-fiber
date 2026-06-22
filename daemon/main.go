@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/chokmah-me/dwell-fiber/pkg/enforcement"
 )
 
 func main() {
@@ -20,7 +22,9 @@ func main() {
 	testEnforcement := flag.Bool("test-enforcement", false, "Run enforcement test suite")
 	enableEnforcement := flag.Bool("enable-enforcement", false, "Enable actual enforcement (not dry-run)")
 	enableKilling := flag.Bool("enable-killing", false, "Enable process killing (very dangerous!)")
-	useV3WIP := flag.Bool("use-v3-wip", false, "Run the V3 rate-based WIP detector in parallel (observation only, no enforcement)")
+	useV3WIP := flag.Bool("use-v3-wip", false, "Run the V3 rate-based WIP detector in parallel (observation only by default)")
+	v3Enforce := flag.Bool("v3-enforce", false, "Enable V3 (WIP) enforcement: io.max throttle high-pressure PIDs (requires --use-v3-wip)")
+	v3EnableKilling := flag.Bool("v3-enable-killing", false, "Enable V3 process killing (requires --v3-enforce; very dangerous!)")
 	flag.Parse()
 
 	fmt.Println("[SHIELD] Dwell-Fiber Daemon Starting")
@@ -95,12 +99,40 @@ func main() {
 			// dwell_fiber_v3_* metrics but never enforces.
 			if *useV3WIP {
 				ctrlV3 := NewControllerV3(*alpha)
+
+				// V3 enforcement is opt-in and dry-run by default, mirroring V2.
+				// --v3-enforce arms io.max throttling; --v3-enable-killing is a
+				// second, separate gate for killing. Without --v3-enforce the
+				// enforcer still logs "would" actions (dry-run).
+				if *v3Enforce || *v3EnableKilling {
+					// Killing requires enforcement to be armed (see flag help).
+					killing := *v3EnableKilling && *v3Enforce
+					v3cfg := enforcement.DefaultConfig()
+					v3cfg.Enabled = *v3Enforce
+					v3cfg.KillEnabled = killing
+					ctrlV3.SetEnforcer(enforcement.NewEnforcer(v3cfg))
+					mode := "DRY-RUN (would-enforce logging)"
+					if *v3Enforce {
+						mode = "io.max throttle"
+						if killing {
+							mode += " + KILL"
+						}
+					} else if *v3EnableKilling {
+						fmt.Println("⚠️  --v3-enable-killing ignored without --v3-enforce")
+					}
+					fmt.Printf("⚠️  V3 enforcement: %s\n", mode)
+				}
+
 				wipMonitor, werr := NewWIPMonitor(bpfLoader, ctrlV3)
 				if werr != nil {
 					log.Printf("⚠️  Failed to start V3 WIP observation: %v", werr)
 				} else {
 					defer wipMonitor.Close()
-					fmt.Println("🔬 V3 WIP observation ENABLED (rate-based detection, NO enforcement)")
+					action := "NO enforcement"
+					if *v3Enforce {
+						action = "ENFORCING"
+					}
+					fmt.Printf("🔬 V3 WIP ENABLED (rate-based detection, %s)\n", action)
 				}
 			}
 		}

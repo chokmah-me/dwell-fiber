@@ -3,6 +3,8 @@ package main
 import (
 	"sync"
 	"testing"
+
+	"github.com/chokmah-me/dwell-fiber/pkg/enforcement"
 )
 
 // newTestControllerV3 builds a ControllerV3 without Prometheus registration by
@@ -80,6 +82,57 @@ func TestUpdatePriceV3_StaysZeroWhenIdle(t *testing.T) {
 	// Even with a little residual price, it decays to 0 (non-negative clamp).
 	if price := c.updatePriceV3(50, 0, tierConfigs[T2].Budget); price != 0 {
 		t.Errorf("expected price clamped to 0, got %.3f", price)
+	}
+}
+
+func TestLeak_BleedsOffTransientBurst(t *testing.T) {
+	c := newTestControllerV3(0.5)
+	c.Leak = defaultLeak
+	// A one-off benign burst latched some price; with no further pressure it
+	// must bleed back to 0 so it never reaches the enforcement threshold.
+	price := 100.0
+	for i := 0; i < 60; i++ {
+		price = c.leak(price)
+	}
+	if price != 0 {
+		t.Errorf("transient price did not bleed off: got %.3f, want 0", price)
+	}
+}
+
+func TestLeak_SustainedStaysHigh(t *testing.T) {
+	c := newTestControllerV3(0.5)
+	c.Leak = defaultLeak
+	budget := tierConfigs[T2].Budget
+
+	sustained := 0.0
+	for i := 0; i < 20; i++ {
+		sustained = c.updatePriceV3(c.leak(sustained), budget+1000, budget)
+	}
+	if sustained <= 0 {
+		t.Fatalf("sustained pressure should keep price elevated, got %.3f", sustained)
+	}
+
+	// The same magnitude price, once idle, must fall below the sustained level.
+	idle := sustained
+	for i := 0; i < 20; i++ {
+		idle = c.leak(idle)
+	}
+	if idle >= sustained {
+		t.Errorf("idle price %.3f should fall below sustained %.3f", idle, sustained)
+	}
+}
+
+func TestEnforceWIP_DryRunTakesNoAction(t *testing.T) {
+	cfg := enforcement.DefaultConfig() // Enabled=false, KillEnabled=false
+	e := enforcement.NewEnforcer(cfg)
+
+	for _, price := range []float64{0, cfg.V3ThrottlePrice, cfg.V3KillPrice, cfg.V3KillPrice * 10} {
+		if err := e.EnforceWIP(999999, "unknown-bin", price); err != nil {
+			t.Errorf("EnforceWIP(price=%.0f) in dry-run errored: %v", price, err)
+		}
+	}
+	if throttled, killed := e.GetStats(); throttled != 0 || killed != 0 {
+		t.Errorf("dry-run acted: throttled=%d killed=%d, want 0/0", throttled, killed)
 	}
 }
 
