@@ -201,15 +201,30 @@ Integrated into the daemon, running in parallel with V2 (observation only):
 - **Result**: `bench.py --scenario intermittent` shows `v3_wip`/`v3_price` rising
   while V2 `price` stays 0 — the regression target flipped to detection.
 
-### 🚧 Next phase (deferred — see STATUS.md "Frozen")
+### ✅ Delivered — Enforcement phase
 
-- **Tier-weight/budget calibration**: current budgets are MVP placeholders, not
-  tuned for false positives (the benign/tar scenario also elevates WIP).
+- **Enforcement** (`--v3-enforce`, dry-run by default; `--v3-enable-killing` a
+  separate gate): per-tier I/O throttling via cgroups v2 `io.max`
+  (`pkg/enforcement` `ThrottleIO`/`throttleIOCgroupV2` in a `dwell-fiber-v3.slice`,
+  CPU-throttle fallback), WIP-based killing reusing the V2 `Killer`. Decision in
+  `Enforcer.EnforceWIP`: `price >= V3KillPrice` → kill, `>= V3ThrottlePrice` →
+  throttle. Reuses the V2 `SafetyChecker` whitelists; without `--v3-enforce` it
+  logs "would-enforce" actions.
+- **Price decay** (`ControllerV3.Leak`): the V3 ADMM price leaks each window so a
+  transient benign burst bleeds off rather than latching into enforcement range.
+- **In-kernel write filtering**: `handle_write_enter` now skips sub-page writes
+  and is lookup-only (windows are created only by the openat hook), removing the
+  ~4x system-wide overhead so enforcement can stay armed.
+
+**Calibration status**: tier budgets and `V3ThrottlePrice`/`V3KillPrice` are
+documented starting points. The regression gate is `bench.py`: benign/tar must
+stay below `V3ThrottlePrice` while intermittent clears it. Re-tune on the VM.
+
+### 🚧 Still deferred — see STATUS.md "Frozen"
+
 - **True unique-inode UFM**: requires migrating the BPF build to CO-RE/vmlinux.h
   to read inodes; replaces the opens/s proxy.
-- **Enforcement**: per-tier I/O throttling via cgroups v2 `io.max`, WIP-based
-  killing.
-- ML-based tier classification; integration testing with real ransomware samples.
+- ML-based tier classification; calibration against real ransomware samples.
 
 ---
 

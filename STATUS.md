@@ -23,23 +23,33 @@
 - **Unit tests** (`daemon/controller_test.go`): 6 tests cover ADMM math
   (average-dwell calculation, price update formula, Lemma 3 non-negativity,
   state return). Run with `make test`. Scheduled to run weekly via GitHub Actions.
-- **V3 WIP observation mode** (`--use-v3-wip`): a rate-based Weighted I/O
-  Pressure detector running in parallel with V2 (roadmap "dual mode"),
-  **observation only** (no enforcement). Publishes `dwell_fiber_v3_*` metrics;
-  on the `intermittent` scenario `v3_wip`/`v3_price` rise while V2 `price` stays
-  0 — the blind spot now *detected*, not just observable. Signals come from
-  syscall tracepoints (TBW from `sys_enter_write`; UFM is an opens/s proxy).
-  Tier budgets are MVP placeholders (the benign/tar scenario also elevates WIP);
-  calibration + enforcement are the next phase. See `docs/v3-roadmap.md`.
+- **V3 WIP detection + enforcement** (`--use-v3-wip`): a rate-based Weighted I/O
+  Pressure detector running in parallel with V2 (roadmap "dual mode"). Publishes
+  `dwell_fiber_v3_*` metrics; on the `intermittent` scenario `v3_wip`/`v3_price`
+  rise while V2 `price` stays 0 — the blind spot is *detected*. Signals come from
+  syscall tracepoints (TBW from `sys_enter_write`, now filtered in-kernel to
+  sub-page/lookup-only to bound overhead; UFM is an opens/s proxy).
+  - **Enforcement** (`--v3-enforce`, dry-run by default; `--v3-enable-killing` is
+    a separate gate, mirroring V2): high-pressure PIDs are io.max-throttled
+    (`pkg/enforcement` `EnforceWIP` / `ThrottleIO`), then killed past
+    `V3KillPrice`. Reuses V2's `SafetyChecker` whitelists. Without `--v3-enforce`
+    the daemon logs the actions it *would* take.
+  - **Price decay**: V3 ADMM price leaks each window (`ControllerV3.Leak`) so a
+    transient benign burst bleeds off instead of latching into enforcement range;
+    only *sustained* high WIP enforces.
+  - Tier budgets and the `V3ThrottlePrice`/`V3KillPrice` thresholds are documented
+    starting points still pending VM calibration against `bench.py` benign vs
+    intermittent. See `docs/v3-roadmap.md`.
 
 ## Frozen
 
-- **V3.0 enforcement + full WIP**: the remaining V3 work — cgroups v2 `io.max`
-  I/O throttling/killing, true unique-inode UFM (needs CO-RE/vmlinux.h), and
-  tier-weight/budget calibration against real ransomware samples. Original
-  drafts in `outputs/` (preserved at tags `v3.0.0`–`v3.0.2`) are superseded by
-  the integrated observation MVP above. Gated on external pull. See
-  `docs/v3-roadmap.md`.
+- **V3.0 full WIP**: the remaining V3 work — true unique-inode UFM (needs
+  CO-RE/vmlinux.h, replaces the opens/s proxy), ML-based tier classification,
+  and budget/threshold calibration against *real ransomware samples* (the
+  current values are validated only against the synthetic `bench.py` scenarios).
+  cgroups v2 `io.max` throttling + WIP-based killing have landed (see Working).
+  Original drafts in `outputs/` (preserved at tags `v3.0.0`–`v3.0.2`) are
+  superseded by the integrated daemon above. See `docs/v3-roadmap.md`.
 - **Coq proofs**: 29/48 proven (60%). Framework compiles cleanly. The 19
   admitted proofs require Banach fixed-point and temporal-logic machinery
   that is research, not engineering. See `docs/coq_status.md`. No timeline

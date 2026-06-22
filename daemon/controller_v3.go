@@ -8,7 +8,16 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/chokmah-me/dwell-fiber/pkg/enforcement"
 )
+
+// defaultLeak is the per-window multiplicative decay applied to the V3 ADMM
+// price. ADMM price accumulates, so without leak a transient benign burst would
+// latch high enough to eventually enforce. With leak, only *sustained* high WIP
+// keeps the price elevated -- a one-off burst bleeds off (price *= 0.9 each
+// idle window). Kept just below 1 so detection still climbs under real pressure.
+const defaultLeak = 0.9
 
 // ControllerV3 is the V3.0 rate-based (Weighted I/O Pressure) controller. It runs
 // in OBSERVATION ONLY mode alongside the V2 dwell controller: it computes a WIP
@@ -88,7 +97,13 @@ type ProcessStateV3 struct {
 
 type ControllerV3 struct {
 	Alpha float64 // ADMM step size
+	Leak  float64 // per-window multiplicative price decay (see defaultLeak)
 	mu    sync.RWMutex
+
+	// enforcer is optional. When nil (observation mode), the controller only
+	// publishes metrics. When set, each window's price is fed to EnforceWIP,
+	// which throttles/kills (or dry-run logs) per the enforcement Config gates.
+	enforcer *enforcement.Enforcer
 
 	processStates map[int]*ProcessStateV3
 
@@ -100,11 +115,14 @@ type ControllerV3 struct {
 	ufmGauge          prometheus.Gauge
 	tierGauge         prometheus.Gauge
 	tierSwitchCounter prometheus.Counter
+	throttledGauge    prometheus.Gauge
+	killedGauge       prometheus.Gauge
 }
 
 func NewControllerV3(alpha float64) *ControllerV3 {
 	c := &ControllerV3{
 		Alpha:         alpha,
+		Leak:          defaultLeak,
 		processStates: make(map[int]*ProcessStateV3),
 		wipGauge: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "dwell_fiber_v3_wip",
@@ -130,6 +148,14 @@ func NewControllerV3(alpha float64) *ControllerV3 {
 			Name: "dwell_fiber_v3_tier_switches_total",
 			Help: "Total V3 tier reclassifications",
 		}),
+		throttledGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_v3_throttled_count",
+			Help: "Number of processes V3 has io.max-throttled (0 in observation/dry-run)",
+		}),
+		killedGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_v3_killed_count",
+			Help: "Number of processes V3 has killed (0 in observation/dry-run)",
+		}),
 	}
 
 	prometheus.MustRegister(c.wipGauge)
@@ -138,8 +164,18 @@ func NewControllerV3(alpha float64) *ControllerV3 {
 	prometheus.MustRegister(c.ufmGauge)
 	prometheus.MustRegister(c.tierGauge)
 	prometheus.MustRegister(c.tierSwitchCounter)
+	prometheus.MustRegister(c.throttledGauge)
+	prometheus.MustRegister(c.killedGauge)
 
 	return c
+}
+
+// SetEnforcer attaches an enforcer, switching the controller from observation
+// to enforcement (still subject to the enforcer's own dry-run / kill gates).
+func (c *ControllerV3) SetEnforcer(e *enforcement.Enforcer) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.enforcer = e
 }
 
 // ClassifyTier maps a process name to a tier (name-based; unknown -> T2).
@@ -169,6 +205,16 @@ func (c *ControllerV3) updatePriceV3(price, wip, budget float64) float64 {
 	return math.Max(0, price+c.Alpha*(wip-budget))
 }
 
+// leak returns the price after one window of multiplicative decay. Snaps small
+// residuals to 0 so idle processes don't carry a tiny price forever.
+func (c *ControllerV3) leak(price float64) float64 {
+	p := price * c.Leak
+	if p < 0.5 {
+		return 0
+	}
+	return p
+}
+
 // HandleWIPSample processes one per-PID, per-second rate sample. tbw is MB/s,
 // ufm is files/s. Observation only: updates state + metrics, never enforces.
 func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
@@ -196,12 +242,26 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 	st.TBW = tbw
 	st.UFM = ufm
 	st.WIP = c.CalculateWIP(st.CurrentTier, tbw, ufm)
-	st.CurrentPrice = c.updatePriceV3(st.CurrentPrice, st.WIP, tierConfigs[st.CurrentTier].Budget)
+	// Leak first (bleed off prior accumulation), then apply this window's pressure.
+	st.CurrentPrice = c.updatePriceV3(c.leak(st.CurrentPrice), st.WIP, tierConfigs[st.CurrentTier].Budget)
 	st.LastUpdate = time.Now()
 
 	if st.CurrentPrice > 0 {
-		fmt.Printf("📈 [V3] High I/O pressure: PID=%d (%s) tier=%s TBW=%.1fMB/s UFM=%.0f/s WIP=%.0f price=%.3f (observation only)\n",
-			pid, cmd, st.CurrentTier, tbw, ufm, st.WIP, st.CurrentPrice)
+		mode := "observation only"
+		if c.enforcer != nil {
+			mode = "enforcing"
+		}
+		fmt.Printf("📈 [V3] High I/O pressure: PID=%d (%s) tier=%s TBW=%.1fMB/s UFM=%.0f/s WIP=%.0f price=%.3f (%s)\n",
+			pid, cmd, st.CurrentTier, tbw, ufm, st.WIP, st.CurrentPrice, mode)
+	}
+
+	if c.enforcer != nil {
+		if err := c.enforcer.EnforceWIP(pid, cmd, st.CurrentPrice); err != nil {
+			fmt.Printf("⚠️  [V3] enforce failed: %v\n", err)
+		}
+		throttled, killed := c.enforcer.GetStats()
+		c.throttledGauge.Set(float64(throttled))
+		c.killedGauge.Set(float64(killed))
 	}
 
 	c.publishPeak()
@@ -231,10 +291,18 @@ func (c *ControllerV3) Cleanup() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	cutoff := time.Now().Add(-2 * time.Minute)
+	now := time.Now()
+	cutoff := now.Add(-2 * time.Minute)
+	// Windows older than ~1.5s missed the last poll (no activity); leak their
+	// price so idle processes bleed back down toward 0 instead of latching.
+	idle := now.Add(-1500 * time.Millisecond)
 	for pid, st := range c.processStates {
 		if st.LastUpdate.Before(cutoff) {
 			delete(c.processStates, pid)
+			continue
+		}
+		if st.LastUpdate.Before(idle) && st.CurrentPrice > 0 {
+			st.CurrentPrice = c.leak(st.CurrentPrice)
 		}
 	}
 	c.publishPeak()

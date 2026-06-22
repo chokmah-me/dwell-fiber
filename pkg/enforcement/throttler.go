@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // Throttler manages CPU throttling via cgroups v2
@@ -101,6 +103,89 @@ func (t *Throttler) throttleCgroupV2(pid int) error {
 	}
 
 	return nil
+}
+
+// ThrottleIO caps a process's write bandwidth via cgroups v2 io.max. Used by the
+// V3 (WIP) path: WIP is a write-rate signal, so I/O throttling is the natural
+// response (vs the CPU throttling of Throttle). Gated by safety checks and the
+// recently-throttled debounce. `reason` is a log cause string. Falls back to CPU
+// throttling if the io controller is unavailable.
+func (t *Throttler) ThrottleIO(pid int, cmd, reason string) error {
+	// Don't re-throttle too quickly.
+	if lastThrottle, exists := t.throttled[pid]; exists {
+		if time.Since(lastThrottle) < 10*time.Second {
+			return nil
+		}
+	}
+
+	canEnforce, sreason := t.checker.CanEnforce(pid, cmd)
+	if !canEnforce {
+		return fmt.Errorf("cannot throttle: %s", sreason)
+	}
+
+	fmt.Printf("🐌 [io] Throttling PID=%d (%s) %s -> %d B/s write\n",
+		pid, cmd, reason, t.config.V3ThrottleWBPS)
+
+	if err := t.throttleIOCgroupV2(pid); err != nil {
+		// io.max unavailable (no io controller / can't resolve device): degrade
+		// to CPU throttling rather than leaving the process unchecked.
+		fmt.Printf("⚠️  io.max throttle failed (%v); falling back to CPU throttle\n", err)
+		if cerr := t.throttleCgroupV2(pid); cerr != nil {
+			if nerr := t.throttleNice(pid); nerr != nil {
+				return nerr
+			}
+		}
+	}
+
+	t.throttled[pid] = time.Now()
+	t.throttleAttempts++
+	return nil
+}
+
+// throttleIOCgroupV2 caps write bandwidth for pid via cgroups v2 io.max in a
+// dedicated dwell-fiber-v3.slice (separate from the CPU slice).
+func (t *Throttler) throttleIOCgroupV2(pid int) error {
+	cgroupPath := "/sys/fs/cgroup"
+	if _, err := os.Stat(filepath.Join(cgroupPath, "cgroup.controllers")); err != nil {
+		return fmt.Errorf("cgroups v2 not available: %w", err)
+	}
+
+	maj, min, err := backingDevice(pid)
+	if err != nil {
+		return err
+	}
+
+	v3Cgroup := filepath.Join(cgroupPath, "dwell-fiber-v3.slice")
+	if err := os.MkdirAll(v3Cgroup, 0755); err != nil {
+		return fmt.Errorf("failed to create cgroup: %w", err)
+	}
+
+	// Enable the io controller on the subtree (ignore error if already enabled).
+	_ = os.WriteFile(filepath.Join(cgroupPath, "cgroup.subtree_control"), []byte("+io"), 0644)
+
+	procsPath := filepath.Join(v3Cgroup, "cgroup.procs")
+	if err := os.WriteFile(procsPath, []byte(strconv.Itoa(pid)), 0644); err != nil {
+		return fmt.Errorf("failed to move process to cgroup: %w", err)
+	}
+
+	ioMax := fmt.Sprintf("%d:%d wbps=%d", maj, min, t.config.V3ThrottleWBPS)
+	if err := os.WriteFile(filepath.Join(v3Cgroup, "io.max"), []byte(ioMax), 0644); err != nil {
+		return fmt.Errorf("failed to set io.max: %w", err)
+	}
+	return nil
+}
+
+// backingDevice returns the major:minor of the block device backing the process's
+// current working directory (a proxy for where it is writing). Falls back to the
+// root filesystem's device.
+func backingDevice(pid int) (uint32, uint32, error) {
+	var st unix.Stat_t
+	if err := unix.Stat(fmt.Sprintf("/proc/%d/cwd", pid), &st); err != nil {
+		if err := unix.Stat("/", &st); err != nil {
+			return 0, 0, fmt.Errorf("stat backing device: %w", err)
+		}
+	}
+	return unix.Major(st.Dev), unix.Minor(st.Dev), nil
 }
 
 // throttleNice uses nice/renice as fallback

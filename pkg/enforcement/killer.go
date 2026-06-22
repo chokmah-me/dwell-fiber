@@ -27,34 +27,40 @@ func NewKiller(config *Config, checker *SafetyChecker) *Killer {
 
 // Kill terminates a process gracefully then forcefully
 func (k *Killer) Kill(pid int, cmd string, dwell time.Duration) error {
-	// Check if kill is enabled
-	if !k.config.KillEnabled {
-		fmt.Printf("💀 [DRY-RUN] Would kill PID=%d (%s) dwell=%.2fs\n",
-			pid, cmd, dwell.Seconds())
+	// Check threshold (dry-run check happens in KillNow)
+	if k.config.KillEnabled && dwell < k.config.KillThreshold {
 		return nil
 	}
-	
+	return k.KillNow(pid, cmd, fmt.Sprintf("dwell=%.2fs", dwell.Seconds()))
+}
+
+// KillNow terminates a process gracefully then forcefully, gated only by the
+// KillEnabled dry-run flag and safety checks -- the caller owns the decision of
+// whether the process warrants killing. `reason` is a human-readable cause
+// string (e.g. "dwell=12.0s" or "v3 price=2100") used in log output. Shared by
+// the V2 dwell path (Kill) and the V3 WIP path (Enforcer.EnforceWIP).
+func (k *Killer) KillNow(pid int, cmd, reason string) error {
+	// Check if kill is enabled
+	if !k.config.KillEnabled {
+		fmt.Printf("💀 [DRY-RUN] Would kill PID=%d (%s) %s\n", pid, cmd, reason)
+		return nil
+	}
+
 	// Check if already killed recently
 	if lastKill, exists := k.killed[pid]; exists {
 		if time.Since(lastKill) < 30*time.Second {
 			return nil
 		}
 	}
-	
+
 	// Safety check
-	canEnforce, reason := k.checker.CanEnforce(pid, cmd)
+	canEnforce, sreason := k.checker.CanEnforce(pid, cmd)
 	if !canEnforce {
-		return fmt.Errorf("cannot kill: %s", reason)
+		return fmt.Errorf("cannot kill: %s", sreason)
 	}
-	
-	// Check threshold
-	if dwell < k.config.KillThreshold {
-		return nil
-	}
-	
-	fmt.Printf("💀 Killing PID=%d (%s) dwell=%.2fs (critical threshold)\n",
-		pid, cmd, dwell.Seconds())
-	
+
+	fmt.Printf("💀 Killing PID=%d (%s) %s (critical threshold)\n", pid, cmd, reason)
+
 	// Get process handle
 	process, err := os.FindProcess(pid)
 	if err != nil {
