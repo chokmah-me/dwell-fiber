@@ -5,14 +5,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 9.1+](https://img.shields.io/badge/Coq-9.1%2B-blue.svg)](https://coq.inria.fr/)
-[![Version: v1.5.0](https://img.shields.io/badge/Version-v1.5.0-green.svg)](https://github.com/chokmah-me/dwell-fiber/releases/tag/v1.5.0)
+[![Version: v1.6.0](https://img.shields.io/badge/Version-v1.6.0-green.svg)](https://github.com/chokmah-me/dwell-fiber/releases/tag/v1.6.0)
 [![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/chokmah-me/dwell-fiber)
 
 ## Current status
 
-v1.5.0 ships a correctness fix for concurrent file-descriptor tracking
-and a benchmark harness with empirical results. See [STATUS.md](STATUS.md)
-for what's working, what's frozen, and what isn't happening.
+v1.6.0 empirically demonstrates V2.x's fast-intermittent-encryption blind
+spot: a new benchmark scenario rewrites 2000 files under an armed daemon with
+the price never moving. It also adds events-processed counters and fixes the
+enforcement-mode metric. See [STATUS.md](STATUS.md) for what's working, what's
+frozen, and what isn't happening.
 
 ---
 
@@ -176,11 +178,11 @@ MIT License - See [LICENSE](LICENSE)
 ## Citation
 
 ```bibtex
-@software{dwell_fiber_2025,
+@software{dwell_fiber_2026,
   title={Dwell-Fiber: Formally-Verified Ransomware Defense},
   author={Daniyel Yaacov Bilar},
-  year={2025},
-  version={v1.5.0},
+  year={2026},
+  version={v1.6.0},
   url={https://github.com/chokmah-me/dwell-fiber}
 }
 ```
