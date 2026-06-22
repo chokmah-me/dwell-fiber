@@ -18,6 +18,33 @@ import (
 // controller's own counters (simulation mode, no kernel).
 type eventStatsProvider func() (total, filtered uint64)
 
+// eventsCollector emits dwell_fiber_events_total and
+// dwell_fiber_events_filtered_total from a single eventStats() snapshot per
+// scrape, so the two are mutually consistent. The kernel counters behind them
+// are read non-atomically (separate per-CPU map lookups for total vs filtered),
+// which under continuous background file activity can momentarily sample
+// filtered later than total; a single snapshot plus a defensive clamp keeps the
+// reported filtered <= total (the documented subset invariant).
+type eventsCollector struct {
+	c            *Controller
+	totalDesc    *prometheus.Desc
+	filteredDesc *prometheus.Desc
+}
+
+func (e *eventsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- e.totalDesc
+	ch <- e.filteredDesc
+}
+
+func (e *eventsCollector) Collect(ch chan<- prometheus.Metric) {
+	total, filtered := e.c.eventStats()
+	if filtered > total {
+		filtered = total
+	}
+	ch <- prometheus.MustNewConstMetric(e.totalDesc, prometheus.CounterValue, float64(total))
+	ch <- prometheus.MustNewConstMetric(e.filteredDesc, prometheus.CounterValue, float64(filtered))
+}
+
 type Controller struct {
 	Alpha  float64 // Exported for metrics
 	Budget float64 // Exported for metrics
@@ -120,24 +147,25 @@ func NewController(alpha, budget float64) *Controller {
 	prometheus.MustRegister(c.killedGauge)
 	prometheus.MustRegister(c.enforcementMode)
 
-	// events_total / events_filtered_total are pull-based CounterFuncs so the
-	// kernel's pre-filter session counts can back them in BPF mode. This is what
-	// makes fast-intermittent encryption (all sub-100ms dwells) observable:
-	// every session is counted in-kernel even though none reach userspace.
-	prometheus.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
-		Name: "dwell_fiber_events_total",
-		Help: "Total file-close sessions observed, counted before any noise filter (kernel pre-filter count in BPF mode)",
-	}, func() float64 {
-		total, _ := c.eventStats()
-		return float64(total)
-	}))
-	prometheus.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
-		Name: "dwell_fiber_events_filtered_total",
-		Help: "Sessions dropped by a noise filter and so never updated the price (kernel <100ms + controller <1s); subset of events_total",
-	}, func() float64 {
-		_, filtered := c.eventStats()
-		return float64(filtered)
-	}))
+	// events_total / events_filtered_total are pulled from the kernel's pre-filter
+	// session counts in BPF mode. This is what makes fast-intermittent encryption
+	// (all sub-100ms dwells) observable: every session is counted in-kernel even
+	// though none reach userspace. A single collector reads both from one
+	// eventStats() snapshot per scrape so they stay mutually consistent
+	// (filtered <= total) despite the non-atomic kernel reads behind them.
+	prometheus.MustRegister(&eventsCollector{
+		c: c,
+		totalDesc: prometheus.NewDesc(
+			"dwell_fiber_events_total",
+			"Total file-close sessions observed, counted before any noise filter (kernel pre-filter count in BPF mode)",
+			nil, nil,
+		),
+		filteredDesc: prometheus.NewDesc(
+			"dwell_fiber_events_filtered_total",
+			"Sessions dropped by a noise filter and so never updated the price (kernel <100ms + controller <1s); subset of events_total",
+			nil, nil,
+		),
+	})
 
 	c.SyncEnforcementMode()
 

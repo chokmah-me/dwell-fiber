@@ -169,12 +169,17 @@ func (bm *BPFManager) ReadStats() (total, filtered uint64, err error) {
 		return s, nil
 	}
 
+	// Read filtered before total: both counters increase monotonically and
+	// filtered is always a kernel-side subset of total, so sampling filtered
+	// first then total guarantees total >= filtered despite the non-atomic
+	// two-map-lookup read (a session landing between the reads only ever
+	// raises the later-read total).
 	const statTotal, statFiltered = uint32(0), uint32(1)
-	if total, err = sum(statTotal); err != nil {
-		return 0, 0, fmt.Errorf("read total: %w", err)
-	}
 	if filtered, err = sum(statFiltered); err != nil {
 		return 0, 0, fmt.Errorf("read filtered: %w", err)
+	}
+	if total, err = sum(statTotal); err != nil {
+		return 0, 0, fmt.Errorf("read total: %w", err)
 	}
 	return total, filtered, nil
 }
