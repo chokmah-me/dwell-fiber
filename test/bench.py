@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dwell-Fiber v1.5.0 benchmark harness.
+Dwell-Fiber benchmark harness.
 
 Three scenarios, one results table. No frameworks. No magic.
 
@@ -188,7 +188,7 @@ def write_md(results, out: Path):
         n, f"{n} scenarios")
 
     lines = [
-        "# Dwell-Fiber v1.5.0 Benchmarks",
+        "# Dwell-Fiber Benchmarks",
         "",
         f"Enforcement mode during run: **{enf_label}**",
         "",
@@ -216,13 +216,16 @@ def write_md(results, out: Path):
         "intermittent": [
             "**Intermittent** (2000 files, open->write 1MB->close, no hold): the",
             "LockBit 3.0+ fast-intermittent-encryption pattern. Each file session is",
-            "<1s dwell, so every event is discarded by the controller's noise filter",
-            "(`daemon/controller.go`: `if dwell < 1*time.Second { return }`) BEFORE",
-            "price, averaging, or enforcement run. The `events`/`filtered` columns",
-            "make this directly observable: events climbs into the thousands while",
-            "filtered tracks it 1:1 and price stays 0. An armed, kill-enabled daemon",
-            "rewrites thousands of files with price=0 / killed=0 -- the V2.x blind",
-            "spot, root-caused rather than merely asserted.",
+            "sub-100ms dwell, so it is dropped at the FIRST of two stacked noise",
+            "filters -- the in-kernel `<100ms` guard in `bpf/dwell_monitor.bpf.c`,",
+            "before the event ever reaches the ring buffer (the userspace",
+            "`if dwell < 1*time.Second` filter in `daemon/controller.go` is the",
+            "second). The `events`/`filtered` columns count sessions in-kernel,",
+            "*before* that filter, so they make the blind spot directly observable:",
+            "events climbs into the thousands while filtered tracks it 1:1 and price",
+            "stays 0. An armed, kill-enabled daemon rewrites thousands of files with",
+            "price=0 / killed=0 -- the V2.x blind spot, root-caused rather than",
+            "merely asserted.",
         ],
     }
     present = [r["scenario"] for r in results]
@@ -235,11 +238,13 @@ def write_md(results, out: Path):
         lines += [
             "## The measured gap",
             "",
-            "V2.x tracks dwell *latency* and explicitly drops sub-1s sessions as",
-            "noise, so fast intermittent encryption never registers -- it is not",
-            "merely under-budget, it is filtered out at the source. The `events`",
-            "column proves the daemon *saw* the workload (vs. a dead pipeline):",
-            "thousands of events received, all filtered, price unmoved. The attack",
+            "V2.x tracks dwell *latency* and drops short sessions as noise (a",
+            "<100ms guard in the kernel, then a <1s guard in userspace), so fast",
+            "intermittent encryption never registers -- it is not merely",
+            "under-budget, it is filtered out at the source. The `events` column is",
+            "counted in-kernel before the filter, so it proves the daemon *saw* the",
+            "workload (vs. a dead pipeline): thousands of sessions counted, all",
+            "filtered, price unmoved. The attack",
             "row (if present) confirms the same build detects and kills long-dwell",
             "activity. The V3.0 WIP-based (rate) architecture is research-in-progress",
             "(unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2). This",

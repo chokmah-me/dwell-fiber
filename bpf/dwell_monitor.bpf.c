@@ -65,6 +65,29 @@ struct {
     __uint(max_entries, 256 * 1024);
 } events SEC(".maps");
 
+/* Kernel-side session counters, read by userspace for /metrics. These count
+ * EVERY close that matches a tracked open -- including sub-100ms dwells that
+ * never reach the ring buffer -- so observers can distinguish "saw thousands
+ * of fast sessions and filtered them" (fast intermittent encryption) from "saw
+ * nothing" (dead pipeline). The userspace counters alone cannot: they only see
+ * events that already survived the 100ms in-kernel filter below. */
+#define STAT_SESSIONS_TOTAL    0  /* every matched close, pre-filter */
+#define STAT_SESSIONS_FILTERED 1  /* subset dropped by the <100ms filter */
+
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __uint(max_entries, 2);
+    __type(key, __u32);
+    __type(value, __u64);
+} stats SEC(".maps");
+
+static __always_inline void stat_inc(__u32 idx) {
+    __u64 *c = bpf_map_lookup_elem(&stats, &idx);
+    if (c) {
+        (*c)++;
+    }
+}
+
 SEC("tracepoint/syscalls/sys_enter_openat")
 int handle_openat_enter(void *ctx) {
     __u64 pid_tgid = bpf_get_current_pid_tgid();
@@ -150,8 +173,13 @@ int handle_close_enter(void *ctx) {
         return 0;
     }
 
+    /* Count the session before any filtering: this is the pre-filter total
+     * that makes fast-intermittent workloads visible in /metrics. */
+    stat_inc(STAT_SESSIONS_TOTAL);
+
     __u64 duration = now - value->open_time;
     if (duration < 100000000) {  /* 100ms */
+        stat_inc(STAT_SESSIONS_FILTERED);
         bpf_map_delete_elem(&dwell_tracker, &key);
         return 0;
     }
