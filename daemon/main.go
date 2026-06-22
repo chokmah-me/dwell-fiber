@@ -20,6 +20,7 @@ func main() {
 	testEnforcement := flag.Bool("test-enforcement", false, "Run enforcement test suite")
 	enableEnforcement := flag.Bool("enable-enforcement", false, "Enable actual enforcement (not dry-run)")
 	enableKilling := flag.Bool("enable-killing", false, "Enable process killing (very dangerous!)")
+	useV3WIP := flag.Bool("use-v3-wip", false, "Run the V3 rate-based WIP detector in parallel (observation only, no enforcement)")
 	flag.Parse()
 
 	fmt.Println("[SHIELD] Dwell-Fiber Daemon Starting")
@@ -88,6 +89,20 @@ func main() {
 				}
 				return kTotal, kFiltered + controller.SubSecondFiltered()
 			})
+
+			// V3 observation: run the rate-based WIP detector in parallel with
+			// V2 (roadmap "dual mode"). Observation only -- it publishes
+			// dwell_fiber_v3_* metrics but never enforces.
+			if *useV3WIP {
+				ctrlV3 := NewControllerV3(*alpha)
+				wipMonitor, werr := NewWIPMonitor(bpfLoader, ctrlV3)
+				if werr != nil {
+					log.Printf("⚠️  Failed to start V3 WIP observation: %v", werr)
+				} else {
+					defer wipMonitor.Close()
+					fmt.Println("🔬 V3 WIP observation ENABLED (rate-based detection, NO enforcement)")
+				}
+			}
 		}
 	}
 
