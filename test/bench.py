@@ -170,15 +170,25 @@ def fmt_row(r: dict) -> str:
 
 
 def write_md(results, out: Path):
-    enf = results[0]["after"].get("dwell_fiber_enforcement_enabled", 0) if results else 0
+    # Sample the enforcement flag across every scrape (before+after of each
+    # scenario), not just results[0]: a benign run can scrape 0.0 before the
+    # flag is observed elsewhere, mislabeling an enforcing daemon as dry-run.
+    enf = max(
+        (r[phase].get("dwell_fiber_enforcement_enabled", 0)
+         for r in results for phase in ("before", "after")),
+        default=0,
+    )
     enf_label = "ENABLED" if enf >= 1.0 else "DRY-RUN (observation only)"
+    n = len(results)
+    count_word = {1: "One scenario", 2: "Two scenarios", 3: "Three scenarios"}.get(
+        n, f"{n} scenarios")
 
     lines = [
         "# Dwell-Fiber v1.5.0 Benchmarks",
         "",
         f"Enforcement mode during run: **{enf_label}**",
         "",
-        "Two scenarios run against a single daemon instance with default config",
+        f"{count_word} run against a single daemon instance with default config",
         "(`--alpha=0.5 --budget=5.0`).",
         "",
         "| scenario | elapsed | dwell_avg | price | throttled | killed |",
