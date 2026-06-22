@@ -6,8 +6,8 @@ type: software
 authors:
   - family-names: "Bilar"
     given-names: "Daniyel Yaacov"
-version: "v1.5.0"
-date-released: "2026-05-03"
+version: "v1.6.0"
+date-released: "2026-06-22"
 repository-code: "https://github.com/chokmah-me/dwell-fiber"
 keywords:
   - "ransomware defense"

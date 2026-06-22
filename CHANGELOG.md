@@ -4,12 +4,47 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-22
+
+**Measured result:** an armed, kill-enabled daemon watched 2000 files get
+rewritten (1MB each, sub-second dwell) and took no action — `price` stayed at
+0. The fast-intermittent-encryption blind spot documented since v1.5.0 is now
+empirically demonstrated, root-caused, and observable. See PRs #2/#3/#5 and
+issue #4.
+
 ### Added
+- **Intermittent-encryption benchmark scenario** (`test/bench.py`, #2). Models
+  the LockBit 3.0+ pattern: 2000 files, `open → write 1MB → close`, sub-1s
+  dwell each. New `--scenario intermittent` and `--scenario all`. Produces the
+  empirical evidence of the V2.x blind spot called out as the #1 follow-up in
+  `STATUS.md`, and serves as the regression baseline for any future V3 work.
+- **Events-processed counters** (`daemon/controller.go`, #5, closes #4):
+  `dwell_fiber_events_total` (every close event, counted before the noise
+  filter) and `dwell_fiber_events_filtered_total` (events dropped by the
+  sub-1s filter). Distinguishes "events seen and filtered" from "no events
+  seen" — previously indistinguishable in `/metrics`. `bench.py` reports both
+  as `events`/`filtered` columns.
 - Unit tests for ADMM controller (`daemon/controller_test.go`): 6 tests covering
   average-dwell calculation, price update formula, Lemma 3 non-negativity, and state return.
   Tests run with `make test`.
 - Scheduled GitHub Actions workflow (`scheduled-tests.yml`): weekly test run every Monday
   at 06:00 UTC. Can be triggered manually via `workflow_dispatch`.
+
+### Fixed
+- **Enforcement-mode metric** (`daemon/controller.go`, #3). The
+  `dwell_fiber_enforcement_enabled` gauge was only written inside
+  `HandleCloseEvent`, after the `dwell < 1*time.Second` noise filter. A daemon
+  processing only sub-1s dwells never reached that line and reported `0`
+  ("dry-run") even when launched with `--enable-enforcement`. New
+  `Controller.SyncEnforcementMode()` publishes the flag from config at startup,
+  independent of event flow.
+
+### Changed
+- `test/bench.py` report is now scenario-scoped (a single-scenario run no
+  longer describes absent rows) and the intermittent finding is framed around
+  its root cause — the controller's sub-1s noise filter
+  (`if dwell < 1*time.Second { return }`) — with the new `events`/`filtered`
+  columns as direct evidence.
 
 ## [1.5.0] - 2026-05
 

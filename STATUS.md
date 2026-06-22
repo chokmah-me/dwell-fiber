@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-05 (v1.5.0)
+**Last updated:** 2026-06 (v1.6.0)
 
 ## Working
 
@@ -9,8 +9,13 @@
   with kernel 5.8+.
 - **FD-tracking** (v1.5.0): concurrent file opens in a single process now
   produce distinct dwell events. See `CHANGELOG.md`.
-- **Benchmark harness** (v1.5.0): `test/bench.py` runs benign (tar extract)
-  and sustained-dwell-attack scenarios; results in `BENCHMARKS.md`.
+- **Benchmark harness** (v1.6.0): `test/bench.py` runs benign (tar extract),
+  sustained-dwell-attack, and fast-intermittent-encryption scenarios; results
+  in `BENCHMARKS.md`. `--scenario all` runs all three.
+- **Observability** (v1.6.0): `dwell_fiber_events_total` /
+  `dwell_fiber_events_filtered_total` counters distinguish "events seen and
+  filtered" from "no events seen"; `dwell_fiber_enforcement_enabled` is set at
+  startup (was previously only set after the noise filter).
 - **Unit tests** (`daemon/controller_test.go`): 6 tests cover ADMM math
   (average-dwell calculation, price update formula, Lemma 3 non-negativity,
   state return). Run with `make test`. Scheduled to run weekly via GitHub Actions.
@@ -32,20 +37,23 @@
 - A "production-ready" claim. V2 catches sustained-dwell attacks; it does
   not catch fast intermittent encryption. Treat this as a defense-in-depth
   layer, not an EDR replacement.
-- A V2.0.0 promise. v1.5.0 is the last planned release until either the
-  benchmarks demonstrate V3 is needed empirically, or there's external
-  pull (a paper, a deployment, an issue) for more work.
+- A V2.0.0 promise. The benchmarks now demonstrate the V2 blind spot
+  empirically (see "What's next" #1), but resuming V3 is a research effort
+  gated on external pull (a paper, a deployment, an issue) — not a committed
+  release.
 
 ## What's next
 
 There is no committed roadmap. Likely follow-ups, in rough priority order:
 
-1. ✅ Added an intermittent-encryption scenario to the benchmark harness
-   (`test/bench.py --scenario intermittent`, LockBit-style: 2000 files,
-   open→write 1MB→close, <100ms dwell each). **Remaining:** run it on the
-   Ubuntu target alongside the daemon (`--scenario all`) to produce the
-   empirical evidence — expect price≈0 / killed=0, the documented blind spot.
-2. If (1)'s run shows V2 failing as predicted, resume V3 with the
-   `intermittent` row as regression test (flip it from price≈0/killed=0 to
-   detection).
+1. ✅ **Done (v1.6.0).** Added the intermittent-encryption scenario
+   (`test/bench.py --scenario intermittent`) and ran it on the Ubuntu target
+   against an armed, kill-enabled daemon: 2000 files rewritten, `price` stayed
+   at 0, `killed`/`throttled` at 0. The blind spot is confirmed and
+   root-caused — the controller discards sub-1s dwells before any price update
+   (`daemon/controller.go`: `if dwell < 1*time.Second { return }`). The new
+   `events`/`filtered` counters show the daemon saw and dropped every event.
+2. **Live next step:** resume V3 (rate-based WIP detection) only on external
+   pull. The `intermittent` row is the regression target — V3 must flip it from
+   price≈0/killed=0 to detection.
 3. Otherwise: stop.
