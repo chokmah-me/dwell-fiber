@@ -47,6 +47,9 @@ func main() {
 		controller.enforcer.SetKillEnabled(true)
 		fmt.Println("⚠️⚠️  Process KILLING ENABLED (dangerous!)")
 	}
+	// Publish enforcement state now that flags are applied, so the metric is
+	// correct from startup regardless of whether any event clears the filter.
+	controller.SyncEnforcementMode()
 
 	// Run enforcement tests if requested
 	if *testEnforcement {

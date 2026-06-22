@@ -94,7 +94,23 @@ func NewController(alpha, budget float64) *Controller {
 	prometheus.MustRegister(c.killedGauge)
 	prometheus.MustRegister(c.enforcementMode)
 
+	c.SyncEnforcementMode()
+
 	return c
+}
+
+// SyncEnforcementMode publishes the current enforcement config to the
+// dwell_fiber_enforcement_enabled gauge. Call after enforcement flags are
+// applied: the gauge is otherwise only updated inside HandleCloseEvent's
+// post-noise-filter path, so a daemon that processes only sub-1s dwells would
+// never report its true enforcement state (it would read 0 / "dry-run" even
+// with --enable-enforcement).
+func (c *Controller) SyncEnforcementMode() {
+	if c.enforcer.GetConfig().Enabled {
+		c.enforcementMode.Set(1.0)
+	} else {
+		c.enforcementMode.Set(0.0)
+	}
 }
 
 // Replace the HandleCloseEvent and related functions:
