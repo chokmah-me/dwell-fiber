@@ -196,35 +196,56 @@ def write_md(results, out: Path):
     ]
     for r in results:
         lines.append(fmt_row(r))
-    lines += [
-        "",
-        "## What this shows",
-        "",
-        "**Benign** (tar extraction, 500 files, ~200KB each): files are opened,",
-        "read/written, closed. Dwells are well below the 5s budget. Price stays",
-        "near zero. No enforcement should fire.",
-        "",
-        "**Attack** (100 files held 8s each): sustained dwell well above budget.",
-        "Price climbs, throttle/kill counters should increment with",
-        "`--enable-enforcement --enable-killing`.",
-        "",
-        "**Intermittent** (2000 files, open->write 1MB->close, no hold): the",
-        "LockBit 3.0+ fast-intermittent-encryption pattern. Each file session is",
-        "<100ms dwell, far below the 5s budget, so the ADMM price stays near zero",
-        "and NO enforcement fires -- even though thousands of files were rewritten.",
-        "Price ~0 and killed=0 on this row is the V2.x blind spot, now measured",
-        "rather than asserted.",
-        "",
-        "## The measured gap",
-        "",
-        "V2.x tracks dwell *latency*, not write *rate*, so fast intermittent",
-        "encryption slips under the budget (see the `intermittent` row above).",
-        "The V3.0 WIP-based (rate) architecture is research-in-progress",
-        "(unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2). This",
-        "`intermittent` row is the regression baseline any future V3 work must",
-        "flip from price~0/killed=0 to detection.",
-        "",
-    ]
+    # Per-scenario prose, emitted only for scenarios actually present in this
+    # run -- a single-scenario report shouldn't describe rows that aren't there.
+    blurbs = {
+        "benign": [
+            "**Benign** (tar extraction, 500 files, ~200KB each): files are opened,",
+            "read/written, closed. Dwells are well below the 5s budget. Price stays",
+            "near zero. No enforcement should fire.",
+        ],
+        "attack": [
+            "**Attack** (100 files held 8s each): sustained dwell well above budget.",
+            "Each 8s dwell clears the controller's noise filter, so price climbs and",
+            "throttle/kill counters increment with `--enable-enforcement --enable-killing`.",
+        ],
+        "intermittent": [
+            "**Intermittent** (2000 files, open->write 1MB->close, no hold): the",
+            "LockBit 3.0+ fast-intermittent-encryption pattern. Each file session is",
+            "<1s dwell, so every event is discarded by the controller's noise filter",
+            "(`daemon/controller.go`: `if dwell < 1*time.Second { return }`) BEFORE",
+            "price, averaging, or enforcement run. An armed, kill-enabled daemon",
+            "rewrites thousands of files with price=0 / killed=0 -- the V2.x blind",
+            "spot, root-caused rather than merely asserted.",
+        ],
+    }
+    present = [r["scenario"] for r in results]
+    lines += ["", "## What this shows", ""]
+    for name in ("benign", "attack", "intermittent"):
+        if name in present:
+            lines += blurbs[name] + [""]
+
+    if "intermittent" in present:
+        lines += [
+            "## The measured gap",
+            "",
+            "V2.x tracks dwell *latency* and explicitly drops sub-1s sessions as",
+            "noise, so fast intermittent encryption never registers -- it is not",
+            "merely under-budget, it is filtered out at the source. The attack row",
+            "(if present) confirms the same daemon build *does* detect and kill",
+            "long-dwell activity, so this is a detection gap, not a dead pipeline.",
+            "The V3.0 WIP-based (rate) architecture is research-in-progress",
+            "(unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2). This",
+            "`intermittent` row is the regression baseline any future V3 work must",
+            "flip from price~0/killed=0 to detection.",
+            "",
+            "> Note: the enforcement-mode label above may read DRY-RUN even with",
+            "> `--enable-enforcement`, because the daemon only sets the",
+            "> `dwell_fiber_enforcement_enabled` gauge inside the post-filter path;",
+            "> an all-sub-1s run never reaches it. Trust the daemon's startup banner",
+            "> for the true enforcement state.",
+            "",
+        ]
     out.write_text("\n".join(lines))
     print(f"[ok] wrote {out}")
 
