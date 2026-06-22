@@ -79,6 +79,13 @@ func (bm *BPFMonitor) processEvents() {
 	}
 }
 
+// KernelStats returns the kernel-side pre-filter session counts: total counts
+// every matched close (including sub-100ms dwells the ring buffer drops),
+// filtered counts the subset dropped by the <100ms in-kernel filter.
+func (bm *BPFMonitor) KernelStats() (total, filtered uint64, err error) {
+	return bm.manager.ReadStats()
+}
+
 // Close stops the BPF monitor and cleans up resources
 func (bm *BPFMonitor) Close() error {
 	close(bm.stopCh)

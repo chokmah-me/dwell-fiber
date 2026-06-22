@@ -73,6 +73,21 @@ func main() {
 			*simulate = true
 		} else {
 			defer bpfLoader.Close()
+
+			// Back the events metrics with the kernel's pre-filter session
+			// counts. This is what makes fast-intermittent encryption visible:
+			// the kernel counts every sub-100ms session even though none reach
+			// the ring buffer. events_filtered_total = kernel <100ms drops +
+			// the controller's own sub-1s drops, so it tracks all sessions that
+			// never moved the price.
+			monitor := bpfLoader
+			controller.SetEventStatsProvider(func() (uint64, uint64) {
+				kTotal, kFiltered, err := monitor.KernelStats()
+				if err != nil {
+					return 0, 0
+				}
+				return kTotal, kFiltered + controller.SubSecondFiltered()
+			})
 		}
 	}
 

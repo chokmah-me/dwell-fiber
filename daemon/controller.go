@@ -4,11 +4,19 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chokmah-me/dwell-fiber/pkg/enforcement"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+// eventStatsProvider returns the cumulative (total, filtered) session counts to
+// publish on the events_total / events_filtered_total metrics. It is pluggable
+// so the authoritative source can be the kernel (BPF mode, where the counts
+// include sub-100ms sessions the userspace pipeline never sees) or the
+// controller's own counters (simulation mode, no kernel).
+type eventStatsProvider func() (total, filtered uint64)
 
 type Controller struct {
 	Alpha  float64 // Exported for metrics
@@ -36,8 +44,20 @@ type Controller struct {
 	throttledGauge  prometheus.Gauge
 	killedGauge     prometheus.Gauge
 	enforcementMode prometheus.Gauge
-	eventsTotal     prometheus.Counter
-	eventsFiltered  prometheus.Counter
+
+	// Pre-filter session counters. localTotal counts every event the controller
+	// is handed; subSecFiltered counts those dropped by the sub-1s noise filter.
+	// In BPF mode these are superseded as the metric source by the kernel's
+	// pre-filter counts (see statsProvider), but subSecFiltered is still added
+	// to the kernel's <100ms count so events_filtered_total reflects ALL
+	// sessions that never moved the price (kernel <100ms + controller <1s).
+	localTotal     atomic.Uint64
+	subSecFiltered atomic.Uint64
+
+	// statsProvider feeds the events_total / events_filtered_total CounterFuncs.
+	// Defaults to the local counters; main.go swaps in a kernel-backed provider
+	// once BPF loads.
+	statsProvider atomic.Pointer[eventStatsProvider]
 }
 
 type DwellInfo struct {
@@ -88,27 +108,72 @@ func NewController(alpha, budget float64) *Controller {
 			Name: "dwell_fiber_enforcement_enabled",
 			Help: "Enforcement mode (0=dry-run, 1=enabled)",
 		}),
-		eventsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "dwell_fiber_events_total",
-			Help: "Total close events received from the ring buffer (before the noise filter)",
-		}),
-		eventsFiltered: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "dwell_fiber_events_filtered_total",
-			Help: "Close events dropped by the sub-1s noise filter (subset of events_total)",
-		}),
 	}
+
+	// Default to the local counters; replaced by a kernel-backed provider in
+	// BPF mode (SetEventStatsProvider).
+	c.useLocalStatsProvider()
 
 	prometheus.MustRegister(c.dwellGauge)
 	prometheus.MustRegister(c.priceGauge)
 	prometheus.MustRegister(c.throttledGauge)
 	prometheus.MustRegister(c.killedGauge)
 	prometheus.MustRegister(c.enforcementMode)
-	prometheus.MustRegister(c.eventsTotal)
-	prometheus.MustRegister(c.eventsFiltered)
+
+	// events_total / events_filtered_total are pull-based CounterFuncs so the
+	// kernel's pre-filter session counts can back them in BPF mode. This is what
+	// makes fast-intermittent encryption (all sub-100ms dwells) observable:
+	// every session is counted in-kernel even though none reach userspace.
+	prometheus.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "dwell_fiber_events_total",
+		Help: "Total file-close sessions observed, counted before any noise filter (kernel pre-filter count in BPF mode)",
+	}, func() float64 {
+		total, _ := c.eventStats()
+		return float64(total)
+	}))
+	prometheus.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "dwell_fiber_events_filtered_total",
+		Help: "Sessions dropped by a noise filter and so never updated the price (kernel <100ms + controller <1s); subset of events_total",
+	}, func() float64 {
+		_, filtered := c.eventStats()
+		return float64(filtered)
+	}))
 
 	c.SyncEnforcementMode()
 
 	return c
+}
+
+// eventStats returns the current (total, filtered) counts from the active
+// provider. Safe if no provider is set (returns zero).
+func (c *Controller) eventStats() (total, filtered uint64) {
+	if p := c.statsProvider.Load(); p != nil {
+		return (*p)()
+	}
+	return 0, 0
+}
+
+// useLocalStatsProvider points the events metrics at the controller's own
+// counters (simulation / no-BPF mode).
+func (c *Controller) useLocalStatsProvider() {
+	p := eventStatsProvider(func() (uint64, uint64) {
+		return c.localTotal.Load(), c.subSecFiltered.Load()
+	})
+	c.statsProvider.Store(&p)
+}
+
+// SetEventStatsProvider installs a custom source for the events metrics. main.go
+// uses this in BPF mode to report the kernel's pre-filter session counts (with
+// the controller's sub-1s drops folded into the filtered total).
+func (c *Controller) SetEventStatsProvider(fn eventStatsProvider) {
+	c.statsProvider.Store(&fn)
+}
+
+// SubSecondFiltered returns the count of events the controller dropped via its
+// sub-1s noise filter. Used by the BPF stats provider to fold the controller's
+// 100ms-1s drops into events_filtered_total alongside the kernel's <100ms drops.
+func (c *Controller) SubSecondFiltered() uint64 {
+	return c.subSecFiltered.Load()
 }
 
 // SyncEnforcementMode publishes the current enforcement config to the
@@ -131,15 +196,16 @@ func (c *Controller) HandleCloseEvent(pid int, cmd string, dwell time.Duration) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Count every event before any filtering, so observers can distinguish
-	// "events seen and filtered" from "no events seen" -- otherwise an
-	// all-sub-1s workload (fast intermittent encryption) looks identical to a
-	// dead pipeline in /metrics (price=0, dwell=0, gauges untouched).
-	c.eventsTotal.Inc()
+	// Count every event the controller is handed, before its own filtering.
+	// In simulation mode this is the events_total source; in BPF mode the
+	// kernel's pre-filter count supersedes it (the kernel also sees the sub-100ms
+	// sessions that never reach here). Either way subSecFiltered below feeds the
+	// filtered total.
+	c.localTotal.Add(1)
 
 	// Filter out noise: only process events > 1 seconds (as suggested)
 	if dwell < 1*time.Second {
-		c.eventsFiltered.Inc()
+		c.subSecFiltered.Add(1)
 		return // Silently skip noise
 	}
 

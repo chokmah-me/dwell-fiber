@@ -146,6 +146,39 @@ func (bm *BPFManager) StartReader() error {
 	return nil
 }
 
+// ReadStats reads the kernel-side session counters from the BPF "stats"
+// per-CPU array and sums across CPUs. total counts every close that matched a
+// tracked open (pre-filter); filtered counts the subset dropped by the <100ms
+// in-kernel noise filter. These let userspace report fast-intermittent activity
+// that never reaches the ring buffer.
+func (bm *BPFManager) ReadStats() (total, filtered uint64, err error) {
+	m := bm.Collection.Maps["stats"]
+	if m == nil {
+		return 0, 0, fmt.Errorf("map 'stats' not found")
+	}
+
+	sum := func(idx uint32) (uint64, error) {
+		var perCPU []uint64
+		if err := m.Lookup(idx, &perCPU); err != nil {
+			return 0, err
+		}
+		var s uint64
+		for _, v := range perCPU {
+			s += v
+		}
+		return s, nil
+	}
+
+	const statTotal, statFiltered = uint32(0), uint32(1)
+	if total, err = sum(statTotal); err != nil {
+		return 0, 0, fmt.Errorf("read total: %w", err)
+	}
+	if filtered, err = sum(statFiltered); err != nil {
+		return 0, 0, fmt.Errorf("read filtered: %w", err)
+	}
+	return total, filtered, nil
+}
+
 // Close cleans up BPF resources
 func (bm *BPFManager) Close() error {
 	log.Println("Closing BPF manager...")
