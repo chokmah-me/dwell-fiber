@@ -36,6 +36,8 @@ METRIC_KEYS = (
     "dwell_fiber_throttled_count",
     "dwell_fiber_killed_count",
     "dwell_fiber_enforcement_enabled",
+    "dwell_fiber_events_total",
+    "dwell_fiber_events_filtered_total",
 )
 
 
@@ -165,7 +167,9 @@ def fmt_row(r: dict) -> str:
         f"{a.get('dwell_fiber_dwell_time', 0):>5.2f}s | "
         f"{a.get('dwell_fiber_price', 0):>6.3f} | "
         f"{delta('dwell_fiber_throttled_count'):>9} | "
-        f"{delta('dwell_fiber_killed_count'):>6} |"
+        f"{delta('dwell_fiber_killed_count'):>6} | "
+        f"{delta('dwell_fiber_events_total'):>6} | "
+        f"{delta('dwell_fiber_events_filtered_total'):>8} |"
     )
 
 
@@ -191,8 +195,8 @@ def write_md(results, out: Path):
         f"{count_word} run against a single daemon instance with default config",
         "(`--alpha=0.5 --budget=5.0`).",
         "",
-        "| scenario | elapsed | dwell_avg | price | throttled | killed |",
-        "|----------|--------:|----------:|------:|----------:|-------:|",
+        "| scenario | elapsed | dwell_avg | price | throttled | killed | events | filtered |",
+        "|----------|--------:|----------:|------:|----------:|-------:|-------:|---------:|",
     ]
     for r in results:
         lines.append(fmt_row(r))
@@ -214,7 +218,9 @@ def write_md(results, out: Path):
             "LockBit 3.0+ fast-intermittent-encryption pattern. Each file session is",
             "<1s dwell, so every event is discarded by the controller's noise filter",
             "(`daemon/controller.go`: `if dwell < 1*time.Second { return }`) BEFORE",
-            "price, averaging, or enforcement run. An armed, kill-enabled daemon",
+            "price, averaging, or enforcement run. The `events`/`filtered` columns",
+            "make this directly observable: events climbs into the thousands while",
+            "filtered tracks it 1:1 and price stays 0. An armed, kill-enabled daemon",
             "rewrites thousands of files with price=0 / killed=0 -- the V2.x blind",
             "spot, root-caused rather than merely asserted.",
         ],
@@ -231,19 +237,14 @@ def write_md(results, out: Path):
             "",
             "V2.x tracks dwell *latency* and explicitly drops sub-1s sessions as",
             "noise, so fast intermittent encryption never registers -- it is not",
-            "merely under-budget, it is filtered out at the source. The attack row",
-            "(if present) confirms the same daemon build *does* detect and kill",
-            "long-dwell activity, so this is a detection gap, not a dead pipeline.",
-            "The V3.0 WIP-based (rate) architecture is research-in-progress",
+            "merely under-budget, it is filtered out at the source. The `events`",
+            "column proves the daemon *saw* the workload (vs. a dead pipeline):",
+            "thousands of events received, all filtered, price unmoved. The attack",
+            "row (if present) confirms the same build detects and kills long-dwell",
+            "activity. The V3.0 WIP-based (rate) architecture is research-in-progress",
             "(unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2). This",
             "`intermittent` row is the regression baseline any future V3 work must",
             "flip from price~0/killed=0 to detection.",
-            "",
-            "> Note: the enforcement-mode label above may read DRY-RUN even with",
-            "> `--enable-enforcement`, because the daemon only sets the",
-            "> `dwell_fiber_enforcement_enabled` gauge inside the post-filter path;",
-            "> an all-sub-1s run never reaches it. Trust the daemon's startup banner",
-            "> for the true enforcement state.",
             "",
         ]
     out.write_text("\n".join(lines))

@@ -36,6 +36,8 @@ type Controller struct {
 	throttledGauge  prometheus.Gauge
 	killedGauge     prometheus.Gauge
 	enforcementMode prometheus.Gauge
+	eventsTotal     prometheus.Counter
+	eventsFiltered  prometheus.Counter
 }
 
 type DwellInfo struct {
@@ -86,6 +88,14 @@ func NewController(alpha, budget float64) *Controller {
 			Name: "dwell_fiber_enforcement_enabled",
 			Help: "Enforcement mode (0=dry-run, 1=enabled)",
 		}),
+		eventsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "dwell_fiber_events_total",
+			Help: "Total close events received from the ring buffer (before the noise filter)",
+		}),
+		eventsFiltered: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "dwell_fiber_events_filtered_total",
+			Help: "Close events dropped by the sub-1s noise filter (subset of events_total)",
+		}),
 	}
 
 	prometheus.MustRegister(c.dwellGauge)
@@ -93,6 +103,8 @@ func NewController(alpha, budget float64) *Controller {
 	prometheus.MustRegister(c.throttledGauge)
 	prometheus.MustRegister(c.killedGauge)
 	prometheus.MustRegister(c.enforcementMode)
+	prometheus.MustRegister(c.eventsTotal)
+	prometheus.MustRegister(c.eventsFiltered)
 
 	c.SyncEnforcementMode()
 
@@ -119,8 +131,15 @@ func (c *Controller) HandleCloseEvent(pid int, cmd string, dwell time.Duration) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Count every event before any filtering, so observers can distinguish
+	// "events seen and filtered" from "no events seen" -- otherwise an
+	// all-sub-1s workload (fast intermittent encryption) looks identical to a
+	// dead pipeline in /metrics (price=0, dwell=0, gauges untouched).
+	c.eventsTotal.Inc()
+
 	// Filter out noise: only process events > 1 seconds (as suggested)
 	if dwell < 1*time.Second {
+		c.eventsFiltered.Inc()
 		return // Silently skip noise
 	}
 
