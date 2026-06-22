@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Event counters are now truly pre-filter** (`bpf/dwell_monitor.bpf.c`,
+  `daemon/controller.go`, #7). The v1.6.0 `dwell_fiber_events_total` /
+  `dwell_fiber_events_filtered_total` counters were incremented in userspace
+  (`HandleCloseEvent`), which only runs for events that already survived the
+  kernel's `<100ms` dwell filter in `dwell_monitor.bpf.c`. Fast intermittent
+  encryption (sub-100ms dwells) is dropped entirely in-kernel, so both counters
+  read `0` — indistinguishable from a dead pipeline, the exact failure the
+  counters were meant to rule out. The kernel now counts every matched close in
+  a per-CPU `stats` array *before* the filter; the metrics are served from those
+  counts (`filtered = kernel <100ms + controller <1s`) via a single
+  `prometheus.Collector` that snapshots both in one read so `filtered ≤ total`
+  holds. Verified on the Ubuntu target: the `intermittent` scenario now reports
+  `events` and `filtered` in the thousands with `price 0`.
+
 ## [1.6.0] - 2026-06-22
 
 **Measured result:** an armed, kill-enabled daemon watched 2000 files get
@@ -23,7 +38,9 @@ issue #4.
   filter) and `dwell_fiber_events_filtered_total` (events dropped by the
   sub-1s filter). Distinguishes "events seen and filtered" from "no events
   seen" — previously indistinguishable in `/metrics`. `bench.py` reports both
-  as `events`/`filtered` columns.
+  as `events`/`filtered` columns. **Note:** as shipped these only counted
+  events *past the kernel's `<100ms` filter*, so the intermittent scenario read
+  `0/0`; corrected in #7 (see Unreleased).
 - Unit tests for ADMM controller (`daemon/controller_test.go`): 6 tests covering
   average-dwell calculation, price update formula, Lemma 3 non-negativity, and state return.
   Tests run with `make test`.
