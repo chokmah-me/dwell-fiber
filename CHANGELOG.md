@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **V3 WIP observation mode** (`--use-v3-wip`, `daemon/controller_v3.go`,
+  `daemon/wip_monitor.go`, `bpf/dwell_monitor.bpf.c`). A rate-based Weighted I/O
+  Pressure detector that runs in parallel with V2 (roadmap "dual mode") in
+  **observation only** — it publishes `dwell_fiber_v3_*` metrics but never
+  enforces. Catches the fast-intermittent-encryption pattern V2 is blind to: on
+  `bench.py --scenario intermittent`, `v3_wip`/`v3_price` rise while the V2
+  `price` stays 0 — the documented regression target flipped from blind to
+  detecting. Signals are derived from syscall tracepoints (TBW from
+  `sys_enter_write`; UFM is an opens/s proxy) rather than the stubbed
+  `kprobe/vfs_write` draft, so no CO-RE/vmlinux.h build change is needed.
+  Tier-weight/budget calibration, true unique-inode UFM, and enforcement
+  (cgroups v2 `io.max`) are deferred to a later phase.
+
 ### Fixed
 - **Event counters are now truly pre-filter** (`bpf/dwell_monitor.bpf.c`,
   `daemon/controller.go`, #7). The v1.6.0 `dwell_fiber_events_total` /

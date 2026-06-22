@@ -185,24 +185,31 @@ elif price >= throttle_threshold:
 
 ## Implementation Status
 
-### ✅ Completed (on feature branch)
+### ✅ Delivered — Observation MVP (`--use-v3-wip`)
 
-- Research & empirical analysis (see `V3_PIVOT_RESEARCH_DOSSIER.md` on branch)
-- TCM tier design & weight tuning
-- WIP formula validation via simulation
+Integrated into the daemon, running in parallel with V2 (observation only):
 
-### 🚧 In Progress
+- **TBW/UFM signals via syscall tracepoints**, not the `kprobe/vfs_write` draft.
+  The current minimal BPF build (`bpf/Makefile`: plain `clang -target bpf`, no
+  BTF/vmlinux.h) cannot compile the draft's `file->f_inode->i_ino` access, and
+  the draft stubbed that out (`inode = 0`). Instead: TBW from
+  `tracepoint/syscalls/sys_enter_write` (`count` arg), UFM as an opens/s proxy
+  from the existing openat hook. Per-PID accumulators in a `wip_tracker` hash
+  map, polled + reset every 1s in userspace (`daemon/wip_monitor.go`).
+- **Per-tier ADMM controller** in userspace (`daemon/controller_v3.go`) with
+  name-based tier classification and `dwell_fiber_v3_*` metrics.
+- **Result**: `bench.py --scenario intermittent` shows `v3_wip`/`v3_price` rising
+  while V2 `price` stays 0 — the regression target flipped to detection.
 
-- eBPF `vfs_write` kprobe implementation
-- Unique file tracking (hash map: PID → set of inodes)
-- 1-second windowing with timer
+### 🚧 Next phase (deferred — see STATUS.md "Frozen")
 
-### ❌ Not Started
-
-- Per-tier ADMM controller in userspace
-- I/O throttling via cgroups v2 `io.max`
-- ML-based tier classification
-- Integration testing with real ransomware samples
+- **Tier-weight/budget calibration**: current budgets are MVP placeholders, not
+  tuned for false positives (the benign/tar scenario also elevates WIP).
+- **True unique-inode UFM**: requires migrating the BPF build to CO-RE/vmlinux.h
+  to read inodes; replaces the opens/s proxy.
+- **Enforcement**: per-tier I/O throttling via cgroups v2 `io.max`, WIP-based
+  killing.
+- ML-based tier classification; integration testing with real ransomware samples.
 
 ---
 

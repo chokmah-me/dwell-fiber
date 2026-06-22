@@ -88,6 +88,41 @@ static __always_inline void stat_inc(__u32 idx) {
     }
 }
 
+/* ---- V3 (observation-only): Weighted I/O Pressure (WIP) tracking ----
+ * Rate-based signal that catches fast intermittent encryption, which V2's
+ * dwell-latency tracking filters out. We accumulate, per PID, the bytes written
+ * (TBW) and an open-rate proxy for unique files modified (UFM); userspace polls
+ * this map every ~1s, divides by the elapsed window, and resets. This is a
+ * tracepoint-only approximation (UFM counts opens, not unique inodes) -- true
+ * inode-level UFM needs CO-RE/vmlinux.h, deferred with enforcement. */
+struct wip_state {
+    __u64 window_start_ns; /* set on first activity in a window */
+    __u64 tbw_accum;       /* bytes written this window */
+    __u64 ufm_accum;       /* opens this window (files-modified proxy) */
+};
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, __u32);    /* pid */
+    __type(value, struct wip_state);
+} wip_tracker SEC(".maps");
+
+/* Get-or-create the per-PID WIP window, stamping window_start_ns on creation. */
+static __always_inline struct wip_state *wip_get(__u32 pid, __u64 now) {
+    struct wip_state *st = bpf_map_lookup_elem(&wip_tracker, &pid);
+    if (st) {
+        return st;
+    }
+    struct wip_state fresh = {
+        .window_start_ns = now,
+        .tbw_accum = 0,
+        .ufm_accum = 0,
+    };
+    bpf_map_update_elem(&wip_tracker, &pid, &fresh, BPF_ANY);
+    return bpf_map_lookup_elem(&wip_tracker, &pid);
+}
+
 SEC("tracepoint/syscalls/sys_enter_openat")
 int handle_openat_enter(void *ctx) {
     __u64 pid_tgid = bpf_get_current_pid_tgid();
@@ -95,6 +130,12 @@ int handle_openat_enter(void *ctx) {
     __u64 now = bpf_ktime_get_ns();
 
     bpf_map_update_elem(&pid_activity, &pid, &now, BPF_ANY);
+
+    /* V3: count this open as a files-modified-proxy event for the WIP window. */
+    struct wip_state *wst = wip_get(pid, now);
+    if (wst) {
+        wst->ufm_accum++;
+    }
 
     /* The fd is the syscall return value, not available until sys_exit_openat.
      * Stash the open timestamp keyed by pid_tgid; promote to (pid, fd) on exit. */
@@ -200,6 +241,30 @@ int handle_close_enter(void *ctx) {
     bpf_ringbuf_submit(event, 0);
     bpf_map_delete_elem(&dwell_tracker, &key);
 
+    return 0;
+}
+
+/* V3: accumulate bytes written per PID for the TBW (total-bytes-written) signal.
+ * The sys_enter_write tracepoint layout is:
+ *   field:int __syscall_nr;        offset 8
+ *   field:unsigned int fd;         offset 16
+ *   field:const char *buf;         offset 24
+ *   field:size_t count;            offset 32
+ * Read `count` from offset 32 (verify on target via
+ * /sys/kernel/tracing/events/syscalls/sys_enter_write/format). */
+SEC("tracepoint/syscalls/sys_enter_write")
+int handle_write_enter(void *ctx) {
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    __u32 pid = pid_tgid >> 32;
+    __u64 now = bpf_ktime_get_ns();
+
+    __u64 count = 0;
+    bpf_probe_read_kernel(&count, sizeof(count), (char *)ctx + 32);
+
+    struct wip_state *wst = wip_get(pid, now);
+    if (wst) {
+        wst->tbw_accum += count;
+    }
     return 0;
 }
 

@@ -38,6 +38,12 @@ METRIC_KEYS = (
     "dwell_fiber_enforcement_enabled",
     "dwell_fiber_events_total",
     "dwell_fiber_events_filtered_total",
+    # V3 (observation-only) rate-based WIP signal; nonzero only when the daemon
+    # is run with --use-v3-wip.
+    "dwell_fiber_v3_wip",
+    "dwell_fiber_v3_price",
+    "dwell_fiber_v3_tbw",
+    "dwell_fiber_v3_ufm",
 )
 
 
@@ -169,7 +175,9 @@ def fmt_row(r: dict) -> str:
         f"{delta('dwell_fiber_throttled_count'):>9} | "
         f"{delta('dwell_fiber_killed_count'):>6} | "
         f"{delta('dwell_fiber_events_total'):>6} | "
-        f"{delta('dwell_fiber_events_filtered_total'):>8} |"
+        f"{delta('dwell_fiber_events_filtered_total'):>8} | "
+        f"{a.get('dwell_fiber_v3_wip', 0):>6.0f} | "
+        f"{a.get('dwell_fiber_v3_price', 0):>8.3f} |"
     )
 
 
@@ -195,8 +203,8 @@ def write_md(results, out: Path):
         f"{count_word} run against a single daemon instance with default config",
         "(`--alpha=0.5 --budget=5.0`).",
         "",
-        "| scenario | elapsed | dwell_avg | price | throttled | killed | events | filtered |",
-        "|----------|--------:|----------:|------:|----------:|-------:|-------:|---------:|",
+        "| scenario | elapsed | dwell_avg | price | throttled | killed | events | filtered | v3_wip | v3_price |",
+        "|----------|--------:|----------:|------:|----------:|-------:|-------:|---------:|-------:|---------:|",
     ]
     for r in results:
         lines.append(fmt_row(r))
@@ -225,7 +233,10 @@ def write_md(results, out: Path):
             "events climbs into the thousands while filtered tracks it 1:1 and price",
             "stays 0. An armed, kill-enabled daemon rewrites thousands of files with",
             "price=0 / killed=0 -- the V2.x blind spot, root-caused rather than",
-            "merely asserted.",
+            "merely asserted. When the daemon is run with `--use-v3-wip`, the",
+            "rate-based V3 detector (observation only) *does* register this: the",
+            "`v3_wip`/`v3_price` columns rise while the V2 `price` stays 0 -- the",
+            "regression target flipped from blind to detecting.",
         ],
     }
     present = [r["scenario"] for r in results]

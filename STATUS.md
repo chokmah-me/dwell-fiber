@@ -23,14 +23,23 @@
 - **Unit tests** (`daemon/controller_test.go`): 6 tests cover ADMM math
   (average-dwell calculation, price update formula, Lemma 3 non-negativity,
   state return). Run with `make test`. Scheduled to run weekly via GitHub Actions.
+- **V3 WIP observation mode** (`--use-v3-wip`): a rate-based Weighted I/O
+  Pressure detector running in parallel with V2 (roadmap "dual mode"),
+  **observation only** (no enforcement). Publishes `dwell_fiber_v3_*` metrics;
+  on the `intermittent` scenario `v3_wip`/`v3_price` rise while V2 `price` stays
+  0 — the blind spot now *detected*, not just observable. Signals come from
+  syscall tracepoints (TBW from `sys_enter_write`; UFM is an opens/s proxy).
+  Tier budgets are MVP placeholders (the benign/tar scenario also elevates WIP);
+  calibration + enforcement are the next phase. See `docs/v3-roadmap.md`.
 
 ## Frozen
 
-- **V3.0 WIP-based architecture**: drafts in `outputs/` (tracked on `main`),
-  preserved at tags `v3.0.0`–`v3.0.2`. There is no active V3 branch.
-  Motivated by V2's blind spot for fast intermittent encryption (LockBit 3.0+).
-  Not actively developed. The eBPF and Go drafts in `outputs/` are
-  unintegrated; tier weights are unvalidated. See `docs/v3-roadmap.md`.
+- **V3.0 enforcement + full WIP**: the remaining V3 work — cgroups v2 `io.max`
+  I/O throttling/killing, true unique-inode UFM (needs CO-RE/vmlinux.h), and
+  tier-weight/budget calibration against real ransomware samples. Original
+  drafts in `outputs/` (preserved at tags `v3.0.0`–`v3.0.2`) are superseded by
+  the integrated observation MVP above. Gated on external pull. See
+  `docs/v3-roadmap.md`.
 - **Coq proofs**: 29/48 proven (60%). Framework compiles cleanly. The 19
   admitted proofs require Banach fixed-point and temporal-logic machinery
   that is research, not engineering. See `docs/coq_status.md`. No timeline

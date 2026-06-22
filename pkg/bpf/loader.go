@@ -3,6 +3,7 @@ package bpf
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 
@@ -98,6 +99,76 @@ func (bm *BPFManager) AttachTracepoints() error {
 	log.Println("✓ Attached to sys_enter_close")
 
 	return nil
+}
+
+// AttachWIPTracepoint attaches the V3 sys_enter_write tracepoint that feeds the
+// WIP (Weighted I/O Pressure) signal. Kept separate from AttachTracepoints so
+// the write tracepoint -- which fires on every write syscall system-wide -- is
+// only attached when V3 observation is enabled (--use-v3-wip).
+func (bm *BPFManager) AttachWIPTracepoint() error {
+	prog := bm.Collection.Programs["handle_write_enter"]
+	if prog == nil {
+		return fmt.Errorf("program handle_write_enter not found")
+	}
+	tp, err := link.Tracepoint("syscalls", "sys_enter_write", prog, nil)
+	if err != nil {
+		return fmt.Errorf("attach write tracepoint: %w", err)
+	}
+	bm.Links = append(bm.Links, tp)
+	log.Println("✓ Attached to sys_enter_write (V3 WIP)")
+	return nil
+}
+
+// WIPSample is one PID's accumulated WIP-window state, mirroring the BPF
+// struct wip_state. Counts are cumulative since the window start; the caller
+// divides by the elapsed window to get per-second rates.
+type WIPSample struct {
+	PID           uint32
+	WindowStartNs uint64
+	TBWAccum      uint64
+	UFMAccum      uint64
+}
+
+// wipState matches the BPF struct wip_state field order (window_start, tbw, ufm).
+type wipState struct {
+	WindowStartNs uint64
+	TBWAccum      uint64
+	UFMAccum      uint64
+}
+
+// ReadWIP snapshots the per-PID WIP accumulators and deletes the entries it read,
+// so each poll measures a fresh window. Entries that reappear before the next
+// poll simply start a new window on their next syscall.
+func (bm *BPFManager) ReadWIP() ([]WIPSample, error) {
+	m := bm.Collection.Maps["wip_tracker"]
+	if m == nil {
+		return nil, fmt.Errorf("map 'wip_tracker' not found")
+	}
+
+	var samples []WIPSample
+	var pid uint32
+	var st wipState
+	iter := m.Iterate()
+	for iter.Next(&pid, &st) {
+		samples = append(samples, WIPSample{
+			PID:           pid,
+			WindowStartNs: st.WindowStartNs,
+			TBWAccum:      st.TBWAccum,
+			UFMAccum:      st.UFMAccum,
+		})
+	}
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("iterate wip_tracker: %w", err)
+	}
+
+	// Reset windows by deleting the keys we just read.
+	for i := range samples {
+		key := samples[i].PID
+		if err := m.Delete(&key); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+			log.Printf("WIP reset: delete pid %d: %v", key, err)
+		}
+	}
+	return samples, nil
 }
 
 // StartReader starts reading events from the ring buffer
