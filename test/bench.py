@@ -2,10 +2,11 @@
 """
 Dwell-Fiber v1.5.0 benchmark harness.
 
-Two scenarios, one results table. No frameworks. No magic.
+Three scenarios, one results table. No frameworks. No magic.
 
-  benign  : extract a 100MB tar of small files (real workload, short dwells)
-  attack  : 100 files held open 8s each, random-byte writes (sustained dwell)
+  benign       : extract a 100MB tar of small files (real workload, short dwells)
+  attack       : 100 files held open 8s each, random-byte writes (sustained dwell)
+  intermittent : 2000 files, open->write 1MB->close each (LockBit-style, <100ms dwell)
 
 For each run we scrape /metrics before+after and report the deltas.
 Run ./bin/dwell-fiber-daemon with --enable-enforcement in another terminal first.
@@ -13,7 +14,9 @@ Run ./bin/dwell-fiber-daemon with --enable-enforcement in another terminal first
 Usage:
     python3 test/bench.py --scenario benign
     python3 test/bench.py --scenario attack
-    python3 test/bench.py --scenario both --out BENCHMARKS.md
+    python3 test/bench.py --scenario intermittent
+    python3 test/bench.py --scenario both --out BENCHMARKS.md   # benign + attack
+    python3 test/bench.py --scenario all  --out BENCHMARKS.md   # + intermittent
 """
 import argparse
 import os
@@ -118,6 +121,36 @@ def run_attack(workdir: Path, n_files: int = 100, hold_s: float = 8.0) -> dict:
     return {"scenario": "attack", "elapsed_s": elapsed, "before": before, "after": after}
 
 
+def run_intermittent(workdir: Path, n_files: int = 2000,
+                     chunk_bytes: int = 1_048_576) -> dict:
+    """Open N files, write a 1MB chunk, close immediately. Repeat.
+    This is the LockBit 3.0+ fast-intermittent-encryption pattern: each file
+    session is <100ms dwell, well below the 5s budget, so V2.x dwell tracking
+    never raises the price. The blind spot, made measurable."""
+    target = workdir / "intermittent_out"
+    target.mkdir(exist_ok=True)
+
+    before = scrape()
+    print(f"[intermittent] before: {before}")
+    print(f"[intermittent] writing {n_files} files, {chunk_bytes} bytes each, "
+          "open->write->close (no hold)...")
+    t0 = time.time()
+    for i in range(n_files):
+        path = target / f"victim_{i:05d}.dat"
+        with open(path, "wb") as f:
+            f.write(os.urandom(chunk_bytes))
+            f.flush()
+        # No sleep: short dwell is the whole point.
+        if i % 200 == 0:
+            print(f"  ... {i}/{n_files}")
+    elapsed = time.time() - t0
+    time.sleep(3)
+    after = scrape()
+    print(f"[intermittent] after:  {after}")
+    return {"scenario": "intermittent", "elapsed_s": elapsed,
+            "before": before, "after": after}
+
+
 def fmt_row(r: dict) -> str:
     b = r["before"]
     a = r["after"]
@@ -137,15 +170,25 @@ def fmt_row(r: dict) -> str:
 
 
 def write_md(results, out: Path):
-    enf = results[0]["after"].get("dwell_fiber_enforcement_enabled", 0) if results else 0
+    # Sample the enforcement flag across every scrape (before+after of each
+    # scenario), not just results[0]: a benign run can scrape 0.0 before the
+    # flag is observed elsewhere, mislabeling an enforcing daemon as dry-run.
+    enf = max(
+        (r[phase].get("dwell_fiber_enforcement_enabled", 0)
+         for r in results for phase in ("before", "after")),
+        default=0,
+    )
     enf_label = "ENABLED" if enf >= 1.0 else "DRY-RUN (observation only)"
+    n = len(results)
+    count_word = {1: "One scenario", 2: "Two scenarios", 3: "Three scenarios"}.get(
+        n, f"{n} scenarios")
 
     lines = [
         "# Dwell-Fiber v1.5.0 Benchmarks",
         "",
         f"Enforcement mode during run: **{enf_label}**",
         "",
-        "Two scenarios run against a single daemon instance with default config",
+        f"{count_word} run against a single daemon instance with default config",
         "(`--alpha=0.5 --budget=5.0`).",
         "",
         "| scenario | elapsed | dwell_avg | price | throttled | killed |",
@@ -153,45 +196,77 @@ def write_md(results, out: Path):
     ]
     for r in results:
         lines.append(fmt_row(r))
-    lines += [
-        "",
-        "## What this shows",
-        "",
-        "**Benign** (tar extraction, 500 files, ~200KB each): files are opened,",
-        "read/written, closed. Dwells are well below the 5s budget. Price stays",
-        "near zero. No enforcement should fire.",
-        "",
-        "**Attack** (100 files held 8s each): sustained dwell well above budget.",
-        "Price climbs, throttle/kill counters should increment with",
-        "`--enable-enforcement --enable-killing`.",
-        "",
-        "## Known gap",
-        "",
-        "This harness deliberately does NOT cover fast intermittent encryption",
-        "(LockBit 3.0 pattern: <100ms dwell per file across thousands of files).",
-        "V2.x will not catch that pattern; the V3.0 WIP-based architecture is",
-        "research-in-progress (unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2).",
-        "Adding an intermittent-encryption scenario to this harness is the",
-        "first follow-up after v1.5.0.",
-        "",
-    ]
+    # Per-scenario prose, emitted only for scenarios actually present in this
+    # run -- a single-scenario report shouldn't describe rows that aren't there.
+    blurbs = {
+        "benign": [
+            "**Benign** (tar extraction, 500 files, ~200KB each): files are opened,",
+            "read/written, closed. Dwells are well below the 5s budget. Price stays",
+            "near zero. No enforcement should fire.",
+        ],
+        "attack": [
+            "**Attack** (100 files held 8s each): sustained dwell well above budget.",
+            "Each 8s dwell clears the controller's noise filter, so price climbs and",
+            "throttle/kill counters increment with `--enable-enforcement --enable-killing`.",
+        ],
+        "intermittent": [
+            "**Intermittent** (2000 files, open->write 1MB->close, no hold): the",
+            "LockBit 3.0+ fast-intermittent-encryption pattern. Each file session is",
+            "<1s dwell, so every event is discarded by the controller's noise filter",
+            "(`daemon/controller.go`: `if dwell < 1*time.Second { return }`) BEFORE",
+            "price, averaging, or enforcement run. An armed, kill-enabled daemon",
+            "rewrites thousands of files with price=0 / killed=0 -- the V2.x blind",
+            "spot, root-caused rather than merely asserted.",
+        ],
+    }
+    present = [r["scenario"] for r in results]
+    lines += ["", "## What this shows", ""]
+    for name in ("benign", "attack", "intermittent"):
+        if name in present:
+            lines += blurbs[name] + [""]
+
+    if "intermittent" in present:
+        lines += [
+            "## The measured gap",
+            "",
+            "V2.x tracks dwell *latency* and explicitly drops sub-1s sessions as",
+            "noise, so fast intermittent encryption never registers -- it is not",
+            "merely under-budget, it is filtered out at the source. The attack row",
+            "(if present) confirms the same daemon build *does* detect and kill",
+            "long-dwell activity, so this is a detection gap, not a dead pipeline.",
+            "The V3.0 WIP-based (rate) architecture is research-in-progress",
+            "(unintegrated drafts in `outputs/`, tags v3.0.0-v3.0.2). This",
+            "`intermittent` row is the regression baseline any future V3 work must",
+            "flip from price~0/killed=0 to detection.",
+            "",
+            "> Note: the enforcement-mode label above may read DRY-RUN even with",
+            "> `--enable-enforcement`, because the daemon only sets the",
+            "> `dwell_fiber_enforcement_enabled` gauge inside the post-filter path;",
+            "> an all-sub-1s run never reaches it. Trust the daemon's startup banner",
+            "> for the true enforcement state.",
+            "",
+        ]
     out.write_text("\n".join(lines))
     print(f"[ok] wrote {out}")
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--scenario", choices=("benign", "attack", "both"), default="both")
+    p.add_argument("--scenario",
+                   choices=("benign", "attack", "intermittent", "both", "all"),
+                   default="both")
     p.add_argument("--out", type=Path, default=Path("BENCHMARKS.md"))
     p.add_argument("--workdir", type=Path, default=Path("/tmp/dwell-fiber-bench"))
     args = p.parse_args()
 
     args.workdir.mkdir(parents=True, exist_ok=True)
     results = []
-    if args.scenario in ("benign", "both"):
+    if args.scenario in ("benign", "both", "all"):
         results.append(run_benign(args.workdir))
-    if args.scenario in ("attack", "both"):
+    if args.scenario in ("attack", "both", "all"):
         results.append(run_attack(args.workdir))
+    if args.scenario in ("intermittent", "all"):
+        results.append(run_intermittent(args.workdir))
 
     if not scrape():
         print("[err] daemon /metrics not reachable. Start the daemon first.",

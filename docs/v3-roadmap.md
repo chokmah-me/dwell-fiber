@@ -28,6 +28,11 @@ for each file in /documents:
 
 **Real-World Impact**: LockBit 3.0 encrypts 100GB in ~7 minutes with zero detection by V2.x
 
+**Regression baseline**: `test/bench.py --scenario intermittent` reproduces this
+pattern (2000 files, open→write 1MB→close, <100ms dwell each). On V2.x it yields
+price≈0 / killed=0 despite rewriting every file — the measured blind spot. Any V3
+work must flip this row from price≈0/killed=0 to detection.
+
 ---
 
 ## V3.0 Solution: WIP (Weighted I/O Pressure)

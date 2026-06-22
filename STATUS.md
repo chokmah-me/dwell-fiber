@@ -40,8 +40,12 @@
 
 There is no committed roadmap. Likely follow-ups, in rough priority order:
 
-1. Add an intermittent-encryption scenario to the benchmark harness; run
-   it against V2 to produce empirical evidence of the failure mode.
-2. If (1) shows V2 failing as predicted, resume V3 with the harness as
-   regression test.
+1. ✅ Added an intermittent-encryption scenario to the benchmark harness
+   (`test/bench.py --scenario intermittent`, LockBit-style: 2000 files,
+   open→write 1MB→close, <100ms dwell each). **Remaining:** run it on the
+   Ubuntu target alongside the daemon (`--scenario all`) to produce the
+   empirical evidence — expect price≈0 / killed=0, the documented blind spot.
+2. If (1)'s run shows V2 failing as predicted, resume V3 with the
+   `intermittent` row as regression test (flip it from price≈0/killed=0 to
+   detection).
 3. Otherwise: stop.
