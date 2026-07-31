@@ -13,16 +13,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
-```bash
-make all          # Build everything: eBPF → Coq proofs → Go daemon
-make bpf          # Compile eBPF kernel program to bpf/dwell_monitor.bpf.o
-make coq          # Verify mathematical stability proofs
-make daemon       # Build Go userspace daemon (bin/dwell-fiber-daemon)
-make test         # Run unit tests (cd daemon && go test -v ./...)
-make verify       # Run coq proof verification (coqchk)
-make clean        # Clean all build artifacts
-make run          # Build and run daemon with sudo
-```
+Targets live in the `Makefile` — read it for the current list (`all`, `bpf`, `coq`,
+`daemon`, `test`, `verify`, `clean`, `run`). Non-obvious ordering: the BPF object file
+must exist before `make daemon` (the daemon loads it at runtime, it isn't embedded),
+and `make run` requires root.
 
 ---
 
@@ -66,35 +60,10 @@ This symlink is **essential** — eBPF compilation will fail without it. If you 
 
 ---
 
-## Key Files by Role
-
-| File | Purpose |
-|------|---------|
-| `daemon/main.go` | Entry point, CLI flags, main loop |
-| `daemon/controller.go` | ADMM price algorithm, state management |
-| `daemon/controller_test.go` | Unit tests for ADMM math (6 tests) |
-| `daemon/bpf_monitor.go` | Ring buffer reader, event consumer |
-| `daemon/metrics.go` | Prometheus metrics, HTTP dashboard |
-| `pkg/enforcement/enforcer.go` | Orchestrates throttle/kill decisions |
-| `pkg/enforcement/config.go` | Configuration structs, safe defaults |
-| `pkg/enforcement/safety.go` | Whitelists, liveness checks |
-| `pkg/bpf/loader.go` | eBPF program loader, CO-RE support |
-| `bpf/dwell_monitor.bpf.c` | Kernel-level tracking |
-| `coq/dwell_stable.v` | Core stability proofs |
-| `test/daemon/test_burst_loss.go` | Integration test (Coq-verified parameters) |
-| `.github/workflows/ci.yml` | CI pipeline (Ubuntu 25.10) |
-| `.github/workflows/scheduled-tests.yml` | Weekly test run (Monday 6am UTC) |
-
----
-
 ## Testing
 
-```bash
-make test                    # Unit tests only (fast, no BPF needed)
-cd daemon && go test -v ./...   # Single test run
-go test -v -run TestName ./...  # Single test by name
-make verify                  # Coq proof verification
-```
+`make test` (unit, fast, no BPF/root needed) and `make verify` (Coq); standard
+`go test -v -run TestName ./...` works from `daemon/`.
 
 **Unit tests** (`daemon/controller_test.go`):
 - Test ADMM update formula with various price/dwell inputs
@@ -179,7 +148,6 @@ BPF object file path at runtime: `bpf/dwell_monitor.bpf.o` (relative to binary l
 
 ## Notes for Future Sessions
 
-- **v1.5.0 is frozen**: No active development roadmap. Unit tests and scheduled CI now in place.
-- **V3.0 WIP exists** on branch `feature/v3-wip-architecture` (rate-based detection for fast ransomware). Not actively developed.
-- **Coq proofs**: 29/48 complete (60%). Framework is solid; remaining proofs require Banach fixed-point theorem (research-tier).
-- **Common pattern**: tests don't require BPF compilation; only the daemon binary needs it. Separate the test deps from runtime deps in your task planning.
+Project status, frozen work, and roadmap are in `STATUS.md`. Key gotcha for task planning:
+tests don't require BPF compilation — only the daemon binary needs it; separate test deps from
+runtime deps.
