@@ -5,16 +5,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 9.1+](https://img.shields.io/badge/Coq-9.1%2B-blue.svg)](https://coq.inria.fr/)
-[![Version: v1.6.0](https://img.shields.io/badge/Version-v1.6.0-green.svg)](https://github.com/chokmah-me/dwell-fiber/releases/tag/v1.6.0)
+[![Version: v1.7.0](https://img.shields.io/badge/Version-v1.7.0-green.svg)](https://github.com/chokmah-me/dwell-fiber/releases/tag/v1.7.0)
 [![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/chokmah-me/dwell-fiber)
 
 ## Current status
 
-v1.6.0 empirically demonstrates V2.x's fast-intermittent-encryption blind
-spot: a new benchmark scenario rewrites 2000 files under an armed daemon with
-the price never moving. It also adds events-processed counters and fixes the
-enforcement-mode metric. See [STATUS.md](STATUS.md) for what's working, what's
-frozen, and what isn't happening.
+v1.7.0 ships **V3 dual-mode** alongside production V2: rate-based WIP
+observation (`--use-v3-wip`) detects the fast-intermittent-encryption pattern
+V2 is blind to; opt-in enforcement (`--v3-enforce`, dry-run by default;
+`--v3-enable-killing` separate) can throttle/kill on that signal. Event
+counters are counted **in-kernel before** the dwell filter. V3 thresholds are
+*starting points* — re-tune on your target VM before trusting live enforcement.
+See [STATUS.md](STATUS.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -182,7 +184,7 @@ MIT License - See [LICENSE](LICENSE)
   title={Dwell-Fiber: Formally-Verified Ransomware Defense},
   author={Daniyel Yaacov Bilar},
   year={2026},
-  version={v1.6.0},
+  version={v1.7.0},
   url={https://github.com/chokmah-me/dwell-fiber}
 }
 ```

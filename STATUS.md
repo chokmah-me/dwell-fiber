@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-06 (v1.6.0)
+**Last updated:** 2026-07-31 (v1.7.0)
 
 ## Working
 

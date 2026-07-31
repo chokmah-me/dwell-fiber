@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-07-31
+
+**Summary:** V3 dual-mode (rate-based WIP observation + opt-in enforcement)
+ships alongside V2. Event counters are counted in-kernel before the dwell
+filter. Thresholds remain *starting points* — re-tune on the target VM before
+trusting live V3 enforcement. Offline calibration harness included.
+
 ### Added
 - **V3 WIP enforcement** (`--v3-enforce` / `--v3-enable-killing`, #10). Makes
   `--use-v3-wip` act on the rate-based signal, keeping V2's conservative posture:
@@ -41,6 +48,9 @@ All notable changes to this project are documented in this file.
   Enforcement (cgroups v2 `io.max` throttle + kill) and price decay landed in
   the follow-up enforcement phase above (#10); tier-weight/budget calibration
   and true unique-inode UFM (needs CO-RE/vmlinux.h) remain deferred.
+- **Offline V3 threshold calibration harness** (`test/calibrate_v3.py` and
+  related Ringer brief) for retuning starting-point budgets against bench
+  scenarios.
 
 ### Fixed
 - **Event counters are now truly pre-filter** (`bpf/dwell_monitor.bpf.c`,
