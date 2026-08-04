@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Calibration attempt: V3 thresholds (2026-08-04, no threshold change)
+
+- **VM calibration pass** run on the Ubuntu 25.10 target — the v1.7.0 release
+  note's documented prerequisite ("re-tune on the VM before trusting live V3
+  enforcement") that was previously never done. Result: **infeasible
+  separation**; `V3ThrottlePrice` (50) / `V3KillPrice` (150) remain starting
+  points. See `BENCHMARKS.md` and `docs/v3-calibration.md`.
+- Measured (observation only, `--use-v3-wip`, poller-caught peaks): benign tar
+  extract peak price **542.5** (WIP 1385); intermittent bench peak price **0**
+  (WIP 156–223 — below the T2 budget of 300 at the VM's ~223 files/s);
+  recurring ambient open-storm (~679 opens/s, TBW 0, `(unknown)` PIDs) priced
+  at **87.65** every ~1 minute on an idle VM.
+- Gate results: GATE A **fails** (benign 542 > 50 and even > 150), GATE B
+  **fails** (intermittent never crosses any throttle — the v1.7.0 claim that
+  intermittent clears the throttle is false on this target), GATE C moot.
+  The 50/150 defaults would throttle benign tar and ambient noise while missing
+  the attack.
+- Root causes recorded: T2 budget/weights exceed the real attack rate; TBW from
+  `sys_enter_write` not observed on budget-crossing write workloads (tracepoint
+  `count` offset verified correct at 32 — reliability unresolved, not a fixed
+  offset bug); ambient enumeration exceeds the T2 budget. No BPF/controller/WIP
+  code changes in this pass.
+
 ## [1.7.0] - 2026-07-31
 
 **Summary:** V3 dual-mode (rate-based WIP observation + opt-in enforcement)

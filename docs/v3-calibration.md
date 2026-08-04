@@ -101,3 +101,60 @@ tier / load).
 - Tier budgets and UFM (opens/s proxy vs true unique-inode) are still MVP; do not
   invent CO-RE/UFM claims. True inode UFM remains Frozen in STATUS.md.
 - Unit check: `python test/test_calibrate_v3.py` (stdlib only, exit 0).
+
+---
+
+## Measured run record — 2026-08-04 (Ubuntu 25.10 VM)
+
+**Outcome: infeasible separation — no threshold change committed.** This is the
+measured record the v1.7.0 release note ("re-tune on the VM before trusting live
+V3 enforcement") required. Full report: `BENCHMARKS.md`.
+
+### Environment
+
+- Ubuntu 25.10 (Windows-hosted VM, `DESKTOP-7HDI2D1`); Go 1.24.9, clang 18.1.3,
+  libbpf 1.3.0. Sustained write ~222 MB/s (2 GB intermittent run ≈ 9 s).
+- Daemon: `sudo ./bin/dwell-fiber-daemon --use-v3-wip` (observation only,
+  `dwell_fiber_enforcement_enabled 0` throughout). Peaks from parallel
+  `calibrate_v3.py --from-metrics` pollers (0.5 s cadence).
+
+### Measured peaks and gates
+
+| Scenario | Peak WIP | Poller peak `v3_price` | Gate |
+|----------|---------:|-----------------------:|------|
+| Benign (tar extract, 500×~200KB) | 1385 (`0.3·176.5 + 0.7·1903`) | **542.53** | A **FAILS** vs 50 (and > 150) |
+| Intermittent (2000×1MB, ~223 files/s) | 222 (`0.3·222 + 0.7·223`) | **0.00** | B **FAILS** (below T2 budget 300) |
+| Ambient enumeration (~1/min) | 475 (`0.7·679`, TBW 0) | **87.65** | — (false-positive vs 50 on idle VM) |
+
+Leak math check (matches single-window excess): benign `0.5·(1385−300) = 542.5`;
+ambient `0.5·(475−300) = 87.5`; intermittent `0.5·(222−300) < 0 → 0`.
+
+`P_b = 542.53`, `P_i = 0.00` → `P_i ≤ P_b`, the harness's documented infeasible
+case: all gates false, no band to place, thresholds stay starting points.
+
+### Investigation notes (plan-listed checks)
+
+1. **Write filter / TBW.** `count < 4096` skip is not the issue (1 MB writes
+   pass). Tracepoint layout verified: `sys_enter_write` `count` is at
+   `offset:32` — the BPF read (`ctx + 32`) is correct, so no fixed offset bug.
+   Yet `tbw_accum` read 0 on every budget-crossing write workload attempted
+   (500×1MB probe, intermittent runs); the only nonzero TBW readings occurred on
+   benign phases. Reliability of the write path is unresolved and needs an
+   isolated budget-crossing pure-write experiment.
+2. **Tier classification.** Attack writer is `python3` → T2 (name-based),
+   confirmed in daemon logs and tests.
+3. **Leak/budget.** T2 budget 300 exceeds the real bench WIP (~222); benign's
+   UFM burst (1900/s) crosses via the UFM-heavy weights. Both peaks equal one
+   window of excess — bursts are shorter than the leak's accumulation horizon.
+4. **Ambient noise.** Recurring short-lived `(unknown)` PIDs, UFM 451–679/s,
+   TBW 0, ~15–90 s cadence, most often exactly 679/s — consistent with a
+   periodic ~679-entry directory enumeration (Windows/WSL-interop sync scan).
+   It exceeds the T2 budget on an idle VM and appears in every measurement
+   window.
+
+### Decision
+
+No `V3ThrottlePrice` / `V3KillPrice` change. Enabling `--v3-enforce` on this
+build would throttle benign tar extracts and the ambient noise while missing the
+intermittent pattern. Follow-ups (no code changes in this pass): recalibrate T2
+budget/weights to the real rate; isolate TBW; identify the ambient source.

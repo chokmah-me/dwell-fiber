@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-07-31 (v1.7.0)
+**Last updated:** 2026-08-04 (v1.7.0 + V3 calibration attempt)
 
 ## Working
 
@@ -37,9 +37,13 @@
   - **Price decay**: V3 ADMM price leaks each window (`ControllerV3.Leak`) so a
     transient benign burst bleeds off instead of latching into enforcement range;
     only *sustained* high WIP enforces.
-  - Tier budgets and the `V3ThrottlePrice`/`V3KillPrice` thresholds are documented
-    starting points still pending VM calibration against `bench.py` benign vs
-    intermittent. See `docs/v3-roadmap.md`.
+  - Tier budgets and the `V3ThrottlePrice`/`V3KillPrice` thresholds remain
+    documented starting points. The VM calibration pass (2026-08-04, see
+    `BENCHMARKS.md`) measured **infeasible separation**: benign peaks at 542.5
+    (above both defaults), the intermittent bench prices at 0 (below the T2
+    budget of 300 at ~223 files/s), and a recurring ambient open-storm prices
+    at 87.65 on an idle VM. No band exists, so no threshold change was
+    committed.
 
 ## Frozen
 
@@ -47,6 +51,11 @@
   CO-RE/vmlinux.h, replaces the opens/s proxy), ML-based tier classification,
   and budget/threshold calibration against *real ransomware samples* (the
   current values are validated only against the synthetic `bench.py` scenarios).
+  The 2026-08-04 VM calibration attempt confirmed calibration is not just
+  unstarted but **infeasible against the synthetic bench as shipped** (see
+  Working above and `BENCHMARKS.md`): the T2 budget/weights exceed the real
+  attack rate, TBW was not observed on budget-crossing write workloads, and
+  ambient open-storms exceed the budget.
   cgroups v2 `io.max` throttling + WIP-based killing have landed (see Working).
   Original drafts in `outputs/` (preserved at tags `v3.0.0`–`v3.0.2`) are
   superseded by the integrated daemon above. See `docs/v3-roadmap.md`.
@@ -81,5 +90,15 @@ There is no committed roadmap. Likely follow-ups, in rough priority order:
    daemon saw and dropped every event — thousands counted, `price` unmoved.
 2. **Live next step:** resume V3 (rate-based WIP detection) only on external
    pull. The `intermittent` row is the regression target — V3 must flip it from
-   price≈0/killed=0 to detection.
+   price≈0/killed=0 to detection. The 2026-08-04 calibration pass showed the
+   shipped V3 signal does **not** yet fire on the intermittent bench on the VM;
+   before any enforcement is trusted, in priority order:
+   - Recalibrate T2 budget/weights to the real bench rate (~223 files/s) so the
+     attack can price out above benign — or speed the bench to the assumed rate.
+   - Isolate the TBW write-accumulation path with a budget-crossing pure-write
+     workload (the `sys_enter_write` offset is verified correct; the path was
+     never observed accumulating on a budget-crossing run).
+   - Identify and quiet the ambient enumeration source (~679 opens/s, TBW 0,
+     `(unknown)` PIDs, price 87.65 every ~1 min) that contaminates measurement
+     windows on this host.
 3. Otherwise: stop.
