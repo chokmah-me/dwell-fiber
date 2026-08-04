@@ -58,14 +58,16 @@ func TestCalculateWIP_PerTier(t *testing.T) {
 
 func TestUpdatePriceV3_RisesUnderAttack(t *testing.T) {
 	c := newTestControllerV3(0.5)
-	// Intermittent attack: T2 WIP 500 vs budget 300 -> violation +200.
-	// price 0 + 0.5*200 = 100.
+	// Intermittent attack: T2 WIP 500 vs the configured budget. Expectation is
+	// derived from the config (0.5 * excess), so a budget change doesn't break
+	// this test.
+	want := 0.5 * (500 - tierConfigs[T2].Budget)
 	price := c.updatePriceV3(0, 500, tierConfigs[T2].Budget)
 	if price <= 0 {
 		t.Fatalf("expected price to rise above 0 under attack, got %.3f", price)
 	}
-	if price != 100 {
-		t.Errorf("expected price 100, got %.3f", price)
+	if price != want {
+		t.Errorf("expected price %v, got %.3f", want, price)
 	}
 	// Sustained pressure keeps climbing.
 	if next := c.updatePriceV3(price, 500, tierConfigs[T2].Budget); next <= price {

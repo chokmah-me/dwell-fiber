@@ -37,7 +37,7 @@ LEAK_SNAP = 0.5
 TIER_CONFIGS = {
     "t1": {"omega1": 0.9, "omega2": 0.1, "budget": 3000.0},
     "t1.5": {"omega1": 0.55, "omega2": 0.45, "budget": 1500.0},
-    "t2": {"omega1": 0.3, "omega2": 0.7, "budget": 300.0},
+    "t2": {"omega1": 0.3, "omega2": 0.7, "budget": 150.0},
 }
 
 METRICS_URL = "http://localhost:9090/metrics"

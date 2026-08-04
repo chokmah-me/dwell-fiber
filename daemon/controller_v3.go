@@ -72,7 +72,7 @@ type TierConfig struct {
 var tierConfigs = map[Tier]TierConfig{
 	T1:   {Omega1: 0.9, Omega2: 0.1, Budget: 3000},
 	T1_5: {Omega1: 0.55, Omega2: 0.45, Budget: 1500},
-	T2:   {Omega1: 0.3, Omega2: 0.7, Budget: 300},
+	T2:   {Omega1: 0.3, Omega2: 0.7, Budget: 150},
 }
 
 // Name-based tier classification (docs/v3-roadmap.md). Unknown processes default

@@ -17,6 +17,7 @@ Usage:
     python3 test/bench.py --scenario intermittent
     python3 test/bench.py --scenario both --out BENCHMARKS.md   # benign + attack
     python3 test/bench.py --scenario all  --out BENCHMARKS.md   # + intermittent
+    python3 test/bench.py --prepare-tar                         # pre-build benign.tar
 """
 import argparse
 import os
@@ -86,8 +87,11 @@ def run_benign(workdir: Path) -> dict:
     tar_path = workdir / "benign.tar"
     extract_dir = workdir / "benign_out"
     extract_dir.mkdir(exist_ok=True)
-    print("[benign] building tar...")
-    make_benign_tar(tar_path)
+    if not tar_path.exists():
+        print("[benign] building tar...")
+        make_benign_tar(tar_path)
+    else:
+        print(f"[benign] reusing pre-generated {tar_path}")
 
     before = scrape()
     print(f"[benign] before: {before}")
@@ -274,7 +278,22 @@ def main():
                    default="both")
     p.add_argument("--out", type=Path, default=Path("BENCHMARKS.md"))
     p.add_argument("--workdir", type=Path, default=Path("/tmp/dwell-fiber-bench"))
+    p.add_argument("--prepare-tar", action="store_true",
+                   help="Build benign.tar in the workdir and exit (keeps the "
+                        "tar build out of the measured benign window)")
     args = p.parse_args()
+
+    if args.prepare_tar:
+        args.workdir.mkdir(parents=True, exist_ok=True)
+        tar_path = args.workdir / "benign.tar"
+        if tar_path.exists():
+            print(f"[prepare-tar] {tar_path} already exists; leaving it")
+        else:
+            print(f"[prepare-tar] building {tar_path} (this spikes v3_price; "
+                  "wait for it to drain to 0 before measuring)...")
+            make_benign_tar(tar_path)
+            print("[prepare-tar] done")
+        return
 
     args.workdir.mkdir(parents=True, exist_ok=True)
     results = []
