@@ -92,11 +92,68 @@ open-storm (87.65) both cross `V3ThrottlePrice=50` (benign even crosses
 - Reproducible decision path in `docs/v3-calibration.md` ("Measured run record",
   2026-08-04).
 
-## Follow-ups (not done in this pass — no BPF/controller/WIP code changes)
+## Second calibration pass (2026-08-04, WSL Ubuntu 24.04, T2 budget 150)
 
-1. Recalibrate the T2 budget/weights (or speed the bench) so the real
-   intermittent rate can cross — then re-run GATE A/B.
-2. Isolate the TBW write-accumulation path with a budget-crossing pure-write
-   workload (no opens), then decide if a BPF fix is needed.
-3. Identify and quiet the ambient enumeration source (WSL interop scan) before
-   trusting any near-budget threshold.
+Same harness rule as the first pass: daemon with `--use-v3-wip` (observation
+only), benign + intermittent windows captured by parallel
+`test/calibrate_v3.py --from-metrics` pollers (0.5 s cadence) with the bench's
+own before/after scrapes. This pass used the committed T2 budget change
+(300 → 150, `b730d71`) and the pre-generated `benign.tar` (the measured window
+is a pure `tar -xf`, no in-window build).
+
+| scenario | elapsed | v3_wip (after) | v3_price (after) | v3_price_peak (poller) |
+|----------|--------:|---------------:|-----------------:|-----------------------:|
+| benign (tar extract) | 0.8s | 206 | 179.96 | **199.95** |
+| intermittent (2000×1MB) | 31.0s | 444 | 56.91 | **162.65** |
+
+**P_b = 199.95, P_i = 162.65** → `P_i ≤ P_b` → **infeasible separation again**;
+per the harness rule no band was invented. `V3ThrottlePrice` (50) /
+`V3KillPrice` (150) remain starting points. No threshold change committed.
+
+### Why this time — the first pass's open items are now answered
+
+1. **TBW accumulation WORKS** (first pass's unresolved item, now resolved —
+   no BPF write-path fix needed). The 1200×1MB probe (`test/tbw_probe.py`)
+   accumulated `TBW = 298.8–333.4 MB/s` on the daemon log (PID 20539),
+   WIP 283–323 > budget 150, price → **200.89**; an earlier probe read
+   TBW 195 MB/s (PID 23793). `sys_enter_write` accumulation is live.
+2. **The intermittent bench is too slow on this guest to price.** 2000×1MB
+   took **31.0 s** ≈ 64 files/s (the 25.10 VM sustained ~223/s). WIP ≈ 64 <
+   budget 150, so the bench's own peak price was ~8 (daemon log: `UFM=238/s
+   WIP=167 price=8.3`). The window's 162.65 poller peak is ambient, not the
+   attack — the plan's 222/s assumption does not transfer to this target.
+3. **Benign prices *higher* than the attack — procComm misclassification.**
+   The tar extract was classified **T2**, not T1: `procComm`
+   (`daemon/wip_monitor.go:79`) reads `/proc/<pid>/comm` and returned `unknown`
+   for the live tar process (observed PID skew: the probe's self-reported PID
+   was 278314 while the BPF-observed PID was 20539 — the daemon's `/proc` view
+   does not match the BPF-map PIDs on this guest). `ClassifyTier("unknown")` →
+   T2 (default, `controller_v3.go:182`), so the tar's T2 WIP 206–532 priced to
+   **199.95** during the benign window — above the attack's window peak.
+4. **Ambient floor at budget 150: 162.65.** The recurring ~30 s `(unknown)`
+   PID bursts (UFM 200–679/s, TBW 0) price at `0.5×(0.7·679−150) = 162.65`,
+   and the price never drains to literal 0 — a floor, not a clean baseline.
+
+### Gates (at current defaults 50/150)
+
+| Gate | Requirement | Result |
+|------|-------------|--------|
+| **GATE A** | benign peak `v3_price` < `V3ThrottlePrice` (50) | **FAILS** — benign peaks at 199.95 (above both defaults) |
+| **GATE B** | intermittent peak ≥ `V3ThrottlePrice` | **FAILS** as a signal — the 162.65 window peak is ambient; the bench's own contribution was ~8 |
+| **GATE C** | `V3KillPrice` > `V3ThrottlePrice` | moot — no band exists to place |
+
+`P_i ≤ P_b` → infeasible; the harness rule is explicit: do not invent a band.
+Same conclusion as the first pass, now with different, root-caused reasons.
+
+## Follow-ups (updated after the second pass — no BPF/controller/WIP code changes)
+
+1. Fix `procComm` so the tier classifier sees real comm names (`tar` → T1,
+   benign ≈ 0) — a userspace daemon fix; the smallest path to a workable
+   GATE A. The benign tar extract only prices out because of this
+   misclassification.
+2. Re-calibrate the T2 budget to the real attack rate, or use a faster attack
+   workload: the 1200×1MB probe (WIP ~290) prices at budget 150 while the
+   2000×1MB bench (WIP ~64) does not — the budget sits between the two on this
+   guest.
+3. Identify the ambient enumeration source (~679 opens/s, TBW 0, price 162.65
+   at budget 150) before trusting any near-floor threshold.

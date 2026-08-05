@@ -27,6 +27,40 @@ All notable changes to this project are documented in this file.
   offset bug); ambient enumeration exceeds the T2 budget. No BPF/controller/WIP
   code changes in this pass.
 
+### Calibration pass 2: T2 budget 150 (2026-08-04, WSL Ubuntu 24.04, still no threshold change)
+
+- **Second calibration pass** on the WSL Ubuntu 24.04 guest (the repo's dev
+  target) after the T2 budget change 300 → 150 (`b730d71`) and pre-generated
+  benign tar (window is a pure `tar -xf`). Result: **infeasible separation
+  again** — `P_b = 199.95` (benign window poller peak) vs `P_i = 162.65`
+  (intermittent window poller peak), `P_i ≤ P_b`. `V3ThrottlePrice` (50) /
+  `V3KillPrice` (150) remain starting points. See `BENCHMARKS.md`.
+- **TBW finding — resolves pass 1's open item:** `sys_enter_write`
+  accumulation **works**. The 1200×1MB probe (`test/tbw_probe.py`) read
+  `TBW 298.8–333.4 MB/s`, WIP 283–323 > budget 150, price → 200.89 (an earlier
+  probe read 195 MB/s). No BPF write-path fix is needed.
+- Why the attack still didn't price: the 2000×1MB intermittent bench ran at
+  ~64 files/s (31 s) on this guest — WIP ~64, below the 150 budget; the 25.10
+  VM's ~223 files/s assumption does not transfer. Why benign priced higher:
+  `procComm` returned `unknown` for the live tar process → `ClassifyTier`
+  defaulted it to T2 → the tar's T2 WIP 206–532 priced to 199.95 during the
+  benign window. Ambient floor at budget 150 is now **162.65**
+  (`0.5×(0.7·679−150)`), and the price never drains to literal 0.
+- Gate results unchanged in kind: GATE A **fails** (benign 199.95 > 50 and even
+  > 150), GATE B **fails** as a signal (the 162.65 window peak is ambient; the
+  bench's own contribution was ~8), GATE C moot.
+- No threshold or BPF/controller/WIP code changes in this pass.
+
+### Added
+
+- **TBW gate probe** (`test/tbw_probe.py`): repeatable 1200×1MB (or `--small`
+  3000×256KB) write burst that prints its own PID — the budget-crossing pure
+  write workload that resolved the TBW question.
+- **Self-contained measurement script** (`test/v3_measure.sh`): drains to a
+  price floor, then runs benign + intermittent windows with concurrent poller
+  and bench, writing `/tmp/v3-results/results.json`. Extraction hardened to
+  parse the poller's JSON past its banner line.
+
 ## [1.7.0] - 2026-07-31
 
 **Summary:** V3 dual-mode (rate-based WIP observation + opt-in enforcement)

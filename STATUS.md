@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-08-04 (v1.7.0 + V3 calibration attempt)
+**Last updated:** 2026-08-04 (v1.7.0 + V3 calibration passes 1–2)
 
 ## Working
 
@@ -37,13 +37,17 @@
   - **Price decay**: V3 ADMM price leaks each window (`ControllerV3.Leak`) so a
     transient benign burst bleeds off instead of latching into enforcement range;
     only *sustained* high WIP enforces.
-  - Tier budgets and the `V3ThrottlePrice`/`V3KillPrice` thresholds remain
-    documented starting points. The VM calibration pass (2026-08-04, see
-    `BENCHMARKS.md`) measured **infeasible separation**: benign peaks at 542.5
-    (above both defaults), the intermittent bench prices at 0 (below the T2
-    budget of 300 at ~223 files/s), and a recurring ambient open-storm prices
-    at 87.65 on an idle VM. No band exists, so no threshold change was
-    committed.
+  - Tier budgets (T2 now **150**, `b730d71`) and the
+    `V3ThrottlePrice`/`V3KillPrice` thresholds remain documented starting
+    points. Both VM calibration passes (2026-08-04, see `BENCHMARKS.md`)
+    measured **infeasible separation**: pass 1 (Ubuntu 25.10 VM, budget 300)
+    benign peak 542.5 / intermittent 0 / ambient 87.65; pass 2 (WSL Ubuntu
+    24.04, budget 150) benign peak 199.95 / intermittent 162.65 / ambient
+    floor 162.65. No band exists, so no threshold change was committed.
+    Pass 2 confirmed TBW accumulation **works** (1200×1MB probe:
+    TBW 298.8–333.4 MB/s, WIP 283–323, price 200.89) and root-caused the
+    benign misclassification (`procComm` returning `unknown` → tar defaulted
+    to T2).
 
 ## Frozen
 
@@ -51,11 +55,14 @@
   CO-RE/vmlinux.h, replaces the opens/s proxy), ML-based tier classification,
   and budget/threshold calibration against *real ransomware samples* (the
   current values are validated only against the synthetic `bench.py` scenarios).
-  The 2026-08-04 VM calibration attempt confirmed calibration is not just
-  unstarted but **infeasible against the synthetic bench as shipped** (see
-  Working above and `BENCHMARKS.md`): the T2 budget/weights exceed the real
-  attack rate, TBW was not observed on budget-crossing write workloads, and
-  ambient open-storms exceed the budget.
+  The 2026-08-04 calibration passes (pass 1: budget 300, benign 542.5 vs
+  intermittent 0; pass 2: budget 150, benign 199.95 vs intermittent 162.65)
+  confirmed calibration is not just unstarted but **infeasible against the
+  synthetic bench as shipped** (see Working above and `BENCHMARKS.md`). Pass 1
+  raised a possible write-path issue; pass 2 **resolved it** — TBW accumulation
+  works (probe WIP 283–323 > 150, price 200.89). The attack simply runs below
+  budget on the target, the benign tar extract prices out only because
+  `procComm` misclassifies it as T2, and ambient open-storms exceed the budget.
   cgroups v2 `io.max` throttling + WIP-based killing have landed (see Working).
   Original drafts in `outputs/` (preserved at tags `v3.0.0`–`v3.0.2`) are
   superseded by the integrated daemon above. See `docs/v3-roadmap.md`.
@@ -90,15 +97,19 @@ There is no committed roadmap. Likely follow-ups, in rough priority order:
    daemon saw and dropped every event — thousands counted, `price` unmoved.
 2. **Live next step:** resume V3 (rate-based WIP detection) only on external
    pull. The `intermittent` row is the regression target — V3 must flip it from
-   price≈0/killed=0 to detection. The 2026-08-04 calibration pass showed the
-   shipped V3 signal does **not** yet fire on the intermittent bench on the VM;
-   before any enforcement is trusted, in priority order:
-   - Recalibrate T2 budget/weights to the real bench rate (~223 files/s) so the
-     attack can price out above benign — or speed the bench to the assumed rate.
-   - Isolate the TBW write-accumulation path with a budget-crossing pure-write
-     workload (the `sys_enter_write` offset is verified correct; the path was
-     never observed accumulating on a budget-crossing run).
+   price≈0/killed=0 to detection. Both 2026-08-04 calibration passes (pass 1
+   budget 300, pass 2 budget 150) measured **infeasible separation** on the
+   synthetic bench; the pass-1 "TBW possibly broken" item is **resolved**
+   (pass 2 probe: TBW 298.8–333.4 MB/s, price 200.89 — the write path works).
+   Before any enforcement is trusted, in priority order:
+   - Fix `procComm` so the tier classifier sees real comm names (`tar` → T1,
+     benign ≈ 0); the benign tar extract prices out only because it is
+     misclassified T2 on this host.
+   - Recalibrate the T2 budget to the real attack rate on the target (~64
+     files/s on the WSL guest, not ~223), or use a faster attack workload: the
+     1200×1MB probe (WIP ~290) prices at budget 150 while the 2000×1MB bench
+     (WIP ~64) does not.
    - Identify and quiet the ambient enumeration source (~679 opens/s, TBW 0,
-     `(unknown)` PIDs, price 87.65 every ~1 min) that contaminates measurement
-     windows on this host.
+     `(unknown)` PIDs, price 162.65 at budget 150) that contaminates
+     measurement windows on this host.
 3. Otherwise: stop.

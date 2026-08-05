@@ -123,13 +123,20 @@ measure_window() {
     wait "$poller_pid" || true
 
     # ---- extract peak ----
+    # calibrate_v3.py --from-metrics prints a banner line before the JSON body;
+    # parse from the first '{' so the banner cannot break the read.
     local peak
     set +e
     peak=$(python3 -c \
-        "import json; print(json.load(open('$poller_json'))['peak_price'])" \
-        2>/dev/null)
+        "import json,sys; t=open(sys.argv[1]).read(); print(json.loads(t[t.find('{'):])['peak_price'])" \
+        "$poller_json" 2>/dev/null)
     set -e
-    peak="${peak:-0}"
+    if [ -z "$peak" ]; then
+        peak=0
+        printf '  WARN: could not parse poller JSON (%s); tail of file:\n' \
+            "$poller_json" >&2
+        tail -3 "$poller_json" >&2
+    fi
     printf '%s\n' "$peak" > "$peak_file"
     printf '  peak_price=%s\n' "$peak"
 }

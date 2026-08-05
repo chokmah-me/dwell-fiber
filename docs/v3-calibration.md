@@ -67,8 +67,9 @@ Simulation mirrors `daemon/controller_v3.go`:
 
 - `price = max(0, leak(price) + α*(WIP − budget))`
 - **leak**: multiply by `0.9` (`defaultLeak`), then snap to `0` if result `< 0.5`
-- **T2** (default): WIP = `0.3·TBW + 0.7·UFM`, budget `300`
-- Tier budgets T1=3000 / T1.5=1500 / T2=300 remain **MVP placeholders** — not
+- **T2** (default): WIP = `0.3·TBW + 0.7·UFM`, budget `150`
+  (since `b730d71`; was 300 before the pass-2 experiment)
+- Tier budgets T1=3000 / T1.5=1500 / T2=150 remain **MVP placeholders** — not
   fully calibrated against real ransomware samples (see STATUS.md Frozen).
 
 ---
@@ -158,3 +159,65 @@ No `V3ThrottlePrice` / `V3KillPrice` change. Enabling `--v3-enforce` on this
 build would throttle benign tar extracts and the ambient noise while missing the
 intermittent pattern. Follow-ups (no code changes in this pass): recalibrate T2
 budget/weights to the real rate; isolate TBW; identify the ambient source.
+
+---
+
+## Measured run record — 2026-08-04 (second pass, WSL Ubuntu 24.04, T2 budget 150)
+
+**Outcome: infeasible separation again — no threshold change committed.** This
+pass lowered the T2 budget to 150 (`b730d71`), pre-generated the benign tar (the
+measured window is a pure `tar -xf`, no in-window build), and re-ran the benign
++ intermittent windows. Full report: `BENCHMARKS.md`.
+
+### Environment
+
+- WSL Ubuntu 24.04 guest (`Ubuntu-24.04`, `DESKTOP-7HDI2D1`, user `dyb`); Go
+  toolchain in-guest. Root disk `/dev/sdd` (~941 GB free). Probe workload
+  averaged ~98 MB/s with per-window bursts up to 333 MB/s.
+- Daemon: `sudo ./bin/dwell-fiber-daemon --use-v3-wip` (observation only,
+  `dwell_fiber_enforcement_enabled 0` throughout). Peaks from parallel
+  `calibrate_v3.py --from-metrics` pollers (0.5 s cadence) + bench before/after
+  scrapes + daemon `📈 [V3]` per-window logs.
+
+### Measured peaks and gates
+
+| Scenario | Peak WIP | Poller peak `v3_price` | Gate |
+|----------|---------:|-----------------------:|------|
+| Benign (tar extract, 500×~200KB) | 206–532 (`0.3·28…71 + 0.7·282…730`) | **199.95** | A **FAILS** vs 50 (and > 150) |
+| Intermittent (2000×1MB, ~64 files/s) | ~167 (`UFM 238`, TBW 0) | **162.65** (ambient; bench's own ~8) | B **FAILS** as a signal |
+| Ambient enumeration (~30 s cadence) | 475 (`0.7·679`, TBW 0) | **162.65** | — (floor at budget 150) |
+
+`P_b = 199.95`, `P_i = 162.65` → `P_i ≤ P_b`, the harness's documented
+infeasible case: all gates false, no band to place, thresholds stay starting
+points.
+
+### Investigation notes (pass-2 answers to pass-1's open items)
+
+1. **TBW accumulation works (pass-1 item resolved).** The 1200×1MB probe
+   (`test/tbw_probe.py`) read `TBW = 298.8–333.4 MB/s` (daemon log, PID 20539),
+   WIP 283–323 > budget 150, price → **200.89**; an earlier probe read
+   TBW 195 MB/s (PID 23793). The `sys_enter_write` write-accumulation path is
+   live — the pass-1 "TBW not observed" question was a workload/timing artifact
+   of the 25.10 VM bench, not a BPF bug. No BPF write-path fix is needed.
+2. **Attack rate below budget on this target.** The intermittent bench ran
+   2000×1MB in **31.0 s** ≈ 64 files/s (the 25.10 VM did ~223/s). WIP ≈ 64 <
+   budget 150 → the bench's own price peaked at ~8 (log: `UFM=238/s WIP=167
+   price=8.3`). The 162.65 window peak is ambient. The budget now sits between
+   the probe (WIP ~290, prices) and the bench (WIP ~64, does not).
+3. **Benign misclassification via `procComm` (new root cause).** The tar
+   extract was classified **T2**, not T1: `procComm`
+   (`daemon/wip_monitor.go:79`) returns `unknown` for alive processes on this
+   guest (observed PID skew: probe self-report 278314 vs BPF-observed 20539 —
+   the daemon's `/proc` view does not match the BPF-map PIDs), and
+   `ClassifyTier("unknown")` defaults to T2 (`controller_v3.go:182`). The tar's
+   T2 WIP 206–532 priced to 199.95 in the benign window — above the attack.
+4. **Ambient floor at budget 150: 162.65.** `0.5×(0.7·679−150)`; bursts every
+   ~30 s, price never drains to literal 0.
+
+### Decision
+
+No `V3ThrottlePrice` / `V3KillPrice` change (second infeasibility; same
+conclusion as pass 1, different root causes). Follow-ups (no code changes in
+this pass): fix `procComm` so benign classifies T1; re-calibrate the T2 budget
+to the real attack rate (~64 files/s here) or use a faster attack workload;
+identify the ambient enumeration source.
