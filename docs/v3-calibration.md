@@ -101,6 +101,9 @@ tier / load).
   benign, leak, GATE — these are the knobs and gates this doc owns.
 - Tier budgets and UFM (opens/s proxy vs true unique-inode) are still MVP; do not
   invent CO-RE/UFM claims. True inode UFM remains Frozen in STATUS.md.
+- **Tier names:** V3 resolves process names from the BPF map first (`comm` on
+  `wip_state`), then `/proc/<pid>/comm`. Name-based tiers (`tar` → T1) need a
+  live re-measure after the map-comm fix; do not assume pass-2 peaks still hold.
 - Unit check: `python test/test_calibrate_v3.py` (stdlib only, exit 0).
 
 ---
@@ -204,20 +207,23 @@ points.
    budget 150 → the bench's own price peaked at ~8 (log: `UFM=238/s WIP=167
    price=8.3`). The 162.65 window peak is ambient. The budget now sits between
    the probe (WIP ~290, prices) and the bench (WIP ~64, does not).
-3. **Benign misclassification via `procComm` (new root cause).** The tar
-   extract was classified **T2**, not T1: `procComm`
-   (`daemon/wip_monitor.go:79`) returns `unknown` for alive processes on this
-   guest (observed PID skew: probe self-report 278314 vs BPF-observed 20539 —
-   the daemon's `/proc` view does not match the BPF-map PIDs), and
-   `ClassifyTier("unknown")` defaults to T2 (`controller_v3.go:182`). The tar's
-   T2 WIP 206–532 priced to 199.95 in the benign window — above the attack.
+3. **Benign misclassification via `procComm` (pass-2 root cause; fixed in
+   tree).** The tar extract was classified **T2**, not T1: `/proc`-only
+   `procComm` returned `unknown` under WSL PID skew (probe self-report 278314
+   vs BPF-observed 20539), and `ClassifyTier("unknown")` defaults to T2. The
+   tar's T2 WIP 206–532 priced to 199.95 in the benign window — above the
+   attack. **Post-pass fix:** store `comm` in `wip_tracker` at window create
+   (`bpf_get_current_comm`); userspace `resolveComm` prefers the map. Smoke
+   after rebuild shows real names on V3 pressure lines (no `(unknown)`).
+   Re-run this calibration procedure (`test/v3_measure.sh`) before treating
+   GATE A as recovered.
 4. **Ambient floor at budget 150: 162.65.** `0.5×(0.7·679−150)`; bursts every
    ~30 s, price never drains to literal 0.
 
 ### Decision
 
 No `V3ThrottlePrice` / `V3KillPrice` change (second infeasibility; same
-conclusion as pass 1, different root causes). Follow-ups (no code changes in
-this pass): fix `procComm` so benign classifies T1; re-calibrate the T2 budget
-to the real attack rate (~64 files/s here) or use a faster attack workload;
-identify the ambient enumeration source.
+conclusion as pass 1, different root causes). Follow-ups after this pass: the
+`procComm` map-comm fix is in tree (see CHANGELOG Unreleased); still re-measure
+GATE A/B, re-calibrate T2 budget to the real attack rate (~64 files/s here) or
+use a faster attack workload, and identify the ambient enumeration source.

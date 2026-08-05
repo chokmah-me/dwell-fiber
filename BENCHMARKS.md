@@ -145,15 +145,19 @@ per the harness rule no band was invented. `V3ThrottlePrice` (50) /
 `P_i ≤ P_b` → infeasible; the harness rule is explicit: do not invent a band.
 Same conclusion as the first pass, now with different, root-caused reasons.
 
-## Follow-ups (updated after the second pass — no BPF/controller/WIP code changes)
+## Follow-ups (updated after the second pass)
 
-1. Fix `procComm` so the tier classifier sees real comm names (`tar` → T1,
-   benign ≈ 0) — a userspace daemon fix; the smallest path to a workable
-   GATE A. The benign tar extract only prices out because of this
-   misclassification.
+1. ✅ **Done — map-stored `comm`.** `wip_tracker` now includes `char comm[16]`
+   set with `bpf_get_current_comm` on window create; userspace prefers map
+   comm over `/proc/<pid>/comm` (`daemon/wip_monitor.go` `resolveComm`).
+   Smoke on WSL after rebuild: V3 high-pressure lines name real processes
+   (`python3`, `localstack`, …) with **zero** `(unknown)`. Full
+   `test/v3_measure.sh` re-run still required to confirm tar → T1 and re-score
+   GATE A/B; thresholds unchanged.
 2. Re-calibrate the T2 budget to the real attack rate, or use a faster attack
    workload: the 1200×1MB probe (WIP ~290) prices at budget 150 while the
    2000×1MB bench (WIP ~64) does not — the budget sits between the two on this
    guest.
 3. Identify the ambient enumeration source (~679 opens/s, TBW 0, price 162.65
-   at budget 150) before trusting any near-floor threshold.
+   at budget 150; docker/localstack/containerd candidates) before trusting any
+   near-floor threshold.

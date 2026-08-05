@@ -14,9 +14,11 @@ v1.7.0 ships **V3 dual-mode** alongside production V2: rate-based WIP
 observation (`--use-v3-wip`) detects the fast-intermittent-encryption pattern
 V2 is blind to; opt-in enforcement (`--v3-enforce`, dry-run by default;
 `--v3-enable-killing` separate) can throttle/kill on that signal. Event
-counters are counted **in-kernel before** the dwell filter. V3 thresholds are
-*starting points* — re-tune on your target VM before trusting live enforcement.
-See [STATUS.md](STATUS.md) and [CHANGELOG.md](CHANGELOG.md).
+counters are counted **in-kernel before** the dwell filter. V3 process names
+for tiering come from the BPF `wip_tracker` map (`bpf_get_current_comm` at
+window create), not only `/proc` — required under WSL PID skew. V3 thresholds
+are *starting points* — re-tune on your target before trusting live
+enforcement. See [STATUS.md](STATUS.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -64,6 +66,9 @@ sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
 | **Installation** | [Installation Guide](docs/installation.md) |
 | **V2.x Architecture** | [V2 Architecture](docs/v2-architecture.md) |
 | **V3.0 Roadmap** | [V3 Roadmap](docs/v3-roadmap.md) |
+| **V3 Calibration** | [V3 Threshold Calibration](docs/v3-calibration.md) |
+| **Benchmarks** | [BENCHMARKS.md](BENCHMARKS.md) |
+| **Project status** | [STATUS.md](STATUS.md) |
 | **Coq Proofs** | [Coq Status](docs/coq_status.md) |
 | **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
@@ -78,10 +83,12 @@ dashboard. Catches sustained-dwell attack patterns. See `BENCHMARKS.md` for
 measured behavior.
 
 **Known gap:** V2 cannot catch fast intermittent encryption (LockBit 3.0
-pattern: <100ms dwell per file across thousands of files). The V3.0 WIP-based
-architecture explores a fix and is research-in-progress: unintegrated drafts
-in `outputs/`, preserved at tags `v3.0.0`–`v3.0.2`. See
-[docs/v3-roadmap.md](docs/v3-roadmap.md). No timeline.
+pattern: <100ms dwell per file across thousands of files). **V3 WIP** is
+integrated in dual mode (`--use-v3-wip` / `--v3-enforce`) but not yet
+threshold-calibrated for safe enforcement on every host — two calibration
+passes measured infeasible separation; map-stored `comm` is the latest tiering
+fix. Original V3 drafts remain at tags `v3.0.0`–`v3.0.2` / `outputs/`. See
+[docs/v3-roadmap.md](docs/v3-roadmap.md), [STATUS.md](STATUS.md).
 
 ---
 

@@ -122,18 +122,22 @@ func (bm *BPFManager) AttachWIPTracepoint() error {
 // WIPSample is one PID's accumulated WIP-window state, mirroring the BPF
 // struct wip_state. Counts are cumulative since the window start; the caller
 // divides by the elapsed window to get per-second rates.
+// Field order matches BPF: window_start_ns, tbw_accum, ufm_accum, comm[16].
 type WIPSample struct {
 	PID           uint32
 	WindowStartNs uint64
 	TBWAccum      uint64
 	UFMAccum      uint64
+	Comm          [16]byte
 }
 
-// wipState matches the BPF struct wip_state field order (window_start, tbw, ufm).
+// wipState matches the BPF struct wip_state field order exactly
+// (window_start_ns, tbw_accum, ufm_accum, comm[16]).
 type wipState struct {
 	WindowStartNs uint64
 	TBWAccum      uint64
 	UFMAccum      uint64
+	Comm          [16]byte
 }
 
 // ReadWIP snapshots the per-PID WIP accumulators and deletes the entries it read,
@@ -155,6 +159,7 @@ func (bm *BPFManager) ReadWIP() ([]WIPSample, error) {
 			WindowStartNs: st.WindowStartNs,
 			TBWAccum:      st.TBWAccum,
 			UFMAccum:      st.UFMAccum,
+			Comm:          st.Comm,
 		})
 	}
 	if err := iter.Err(); err != nil {

@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-08-04 (v1.7.0 + V3 calibration passes 1–2)
+**Last updated:** 2026-08-04 (v1.7.0 + V3 calibration passes 1–2 + map-stored comm)
 
 ## Working
 
@@ -48,6 +48,12 @@
     TBW 298.8–333.4 MB/s, WIP 283–323, price 200.89) and root-caused the
     benign misclassification (`procComm` returning `unknown` → tar defaulted
     to T2).
+  - **Map-stored `comm` (post pass 2):** `wip_tracker` now carries
+    `char comm[16]` set with `bpf_get_current_comm` on window create;
+    `daemon/wip_monitor.go` prefers that name over `/proc/<pid>/comm`. Smoke on
+    WSL (2026-08-04): V3 pressure logs show real names (`python3`,
+    `localstack`, …) and **no** `(unknown)` for live high-pressure PIDs. Does
+    not by itself re-open GATE A/B — re-measure still required after rebuild.
 
 ## Frozen
 
@@ -61,8 +67,9 @@
   synthetic bench as shipped** (see Working above and `BENCHMARKS.md`). Pass 1
   raised a possible write-path issue; pass 2 **resolved it** — TBW accumulation
   works (probe WIP 283–323 > 150, price 200.89). The attack simply runs below
-  budget on the target, the benign tar extract prices out only because
-  `procComm` misclassifies it as T2, and ambient open-storms exceed the budget.
+  budget on the target; pass 2's benign T2 misclassification via `/proc`-only
+  `procComm` is **fixed in tree** (map-stored comm — see Working); ambient
+  open-storms still exceed the budget. Re-measure GATE A/B after the comm fix.
   cgroups v2 `io.max` throttling + WIP-based killing have landed (see Working).
   Original drafts in `outputs/` (preserved at tags `v3.0.0`–`v3.0.2`) are
   superseded by the integrated daemon above. See `docs/v3-roadmap.md`.
@@ -102,14 +109,15 @@ There is no committed roadmap. Likely follow-ups, in rough priority order:
    synthetic bench; the pass-1 "TBW possibly broken" item is **resolved**
    (pass 2 probe: TBW 298.8–333.4 MB/s, price 200.89 — the write path works).
    Before any enforcement is trusted, in priority order:
-   - Fix `procComm` so the tier classifier sees real comm names (`tar` → T1,
-     benign ≈ 0); the benign tar extract prices out only because it is
-     misclassified T2 on this host.
+   - ✅ **Done (map-stored comm).** BPF `wip_tracker` stores `comm` at window
+     create; userspace prefers it over `/proc`. Smoke: real names, zero
+     `(unknown)` on V3 pressure lines. Full `v3_measure.sh` re-run still needed
+     to confirm tar → T1 and re-score GATE A/B.
    - Recalibrate the T2 budget to the real attack rate on the target (~64
      files/s on the WSL guest, not ~223), or use a faster attack workload: the
      1200×1MB probe (WIP ~290) prices at budget 150 while the 2000×1MB bench
      (WIP ~64) does not.
    - Identify and quiet the ambient enumeration source (~679 opens/s, TBW 0,
-     `(unknown)` PIDs, price 162.65 at budget 150) that contaminates
-     measurement windows on this host.
+     short-lived PIDs, price 162.65 at budget 150) that contaminates
+     measurement windows on this host (docker/localstack/containerd candidates).
 3. Otherwise: stop.

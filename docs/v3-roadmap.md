@@ -1,8 +1,11 @@
 # V3.0 Roadmap - WIP-Based Architecture
 
-**Status**: 🚧 **Experimental** - Unintegrated drafts in `outputs/`, preserved at tags `v3.0.0`–`v3.0.2` (no active branch)
+**Status**: 🚧 **Experimental (integrated dual-mode)** — observation + opt-in
+enforcement ship in the main daemon (`--use-v3-wip` / `--v3-enforce`). Threshold
+calibration still open (two infeasible passes). Original drafts preserved at
+tags `v3.0.0`–`v3.0.2` / `outputs/`.
 
-V3.0 replaces dwell-time tracking with **rate-based I/O pressure** detection to catch fast intermittent ransomware attacks.
+V3.0 adds **rate-based I/O pressure** detection (alongside V2 dwell) to catch fast intermittent ransomware attacks.
 
 ---
 
@@ -195,7 +198,9 @@ Integrated into the daemon, running in parallel with V2 (observation only):
   the draft stubbed that out (`inode = 0`). Instead: TBW from
   `tracepoint/syscalls/sys_enter_write` (`count` arg), UFM as an opens/s proxy
   from the existing openat hook. Per-PID accumulators in a `wip_tracker` hash
-  map, polled + reset every 1s in userspace (`daemon/wip_monitor.go`).
+  map (including `comm[16]` via `bpf_get_current_comm` at window create),
+  polled + reset every 1s in userspace (`daemon/wip_monitor.go` prefers map
+  comm over `/proc` for tiering under PID skew).
 - **Per-tier ADMM controller** in userspace (`daemon/controller_v3.go`) with
   name-based tier classification and `dwell_fiber_v3_*` metrics.
 - **Result**: `bench.py --scenario intermittent` shows `v3_wip`/`v3_price` rising

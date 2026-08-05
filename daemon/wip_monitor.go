@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chokmah-me/dwell-fiber/pkg/bpf"
 )
 
 // WIPMonitor polls the kernel WIP accumulators once per second, converts the
@@ -61,7 +63,9 @@ func (w *WIPMonitor) loop() {
 				if tbwMBs == 0 && ufmPerSec == 0 {
 					continue
 				}
-				w.ctrl.HandleWIPSample(int(s.PID), procComm(int(s.PID)), tbwMBs, ufmPerSec)
+				// Prefer map-stored comm (captured at tracepoint time); /proc is fallback.
+				comm := resolveComm(int(s.PID), bpf.GetString(s.Comm[:]))
+				w.ctrl.HandleWIPSample(int(s.PID), comm, tbwMBs, ufmPerSec)
 			}
 
 			w.ctrl.Cleanup()
@@ -74,8 +78,38 @@ func (w *WIPMonitor) Close() {
 	close(w.stopCh)
 }
 
+// cleanComm strips a C-style NUL terminator (if present) and trims whitespace.
+// All-NUL / empty input becomes "".
+func cleanComm(s string) string {
+	if i := strings.IndexByte(s, 0); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
+}
+
+// resolveCommFrom prefers a non-empty BPF-stored comm over a /proc-style
+// fallback string. Both empty → "unknown". Pure helper for unit tests.
+func resolveCommFrom(bpfComm, procFallback string) string {
+	if s := cleanComm(bpfComm); s != "" {
+		return s
+	}
+	if s := cleanComm(procFallback); s != "" {
+		return s
+	}
+	return "unknown"
+}
+
+// resolveComm prefers map-stored comm (from wip_tracker at syscall time).
+// Falls back to /proc/<pid>/comm when the map value is empty/all-NUL.
+func resolveComm(pid int, bpfComm string) string {
+	if s := cleanComm(bpfComm); s != "" {
+		return s
+	}
+	return procComm(pid)
+}
+
 // procComm reads the process name from /proc/<pid>/comm. Returns "unknown" if
-// the process has already exited.
+// the process has already exited or the path is unavailable.
 func procComm(pid int) string {
 	data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
 	if err != nil {

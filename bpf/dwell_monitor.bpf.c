@@ -99,6 +99,7 @@ struct wip_state {
     __u64 window_start_ns; /* set on first activity in a window */
     __u64 tbw_accum;       /* bytes written this window */
     __u64 ufm_accum;       /* opens this window (files-modified proxy) */
+    char comm[16];         /* process name at window create (first-open wins) */
 };
 
 struct {
@@ -108,17 +109,18 @@ struct {
     __type(value, struct wip_state);
 } wip_tracker SEC(".maps");
 
-/* Get-or-create the per-PID WIP window, stamping window_start_ns on creation. */
+/* Get-or-create the per-PID WIP window, stamping window_start_ns and comm on
+ * creation. Existing entries keep their stored comm (first-open wins). */
 static __always_inline struct wip_state *wip_get(__u32 pid, __u64 now) {
     struct wip_state *st = bpf_map_lookup_elem(&wip_tracker, &pid);
     if (st) {
         return st;
     }
-    struct wip_state fresh = {
-        .window_start_ns = now,
-        .tbw_accum = 0,
-        .ufm_accum = 0,
-    };
+    struct wip_state fresh = {};
+    fresh.window_start_ns = now;
+    /* Capture comm at syscall time so userspace tiering works even when
+     * /proc/<pid>/comm is missing (e.g. WSL PID skew). */
+    bpf_get_current_comm(&fresh.comm, sizeof(fresh.comm));
     bpf_map_update_elem(&wip_tracker, &pid, &fresh, BPF_ANY);
     return bpf_map_lookup_elem(&wip_tracker, &pid);
 }

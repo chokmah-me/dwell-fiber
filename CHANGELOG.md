@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **V3 tier classification: map-stored `comm`** (2026-08-04). Pass 2 root-caused
+  benign tar pricing as T2 because `procComm` only read `/proc/<pid>/comm` and
+  returned `unknown` under WSL PID skew (BPF-observed PIDs ≠ userspace `/proc`).
+  The daemon now stores process name in the `wip_tracker` map at window create
+  via `bpf_get_current_comm` (same helper V2 already uses on dwell events);
+  userspace prefers map-stored comm and falls back to `/proc` only if empty.
+  Files: `bpf/dwell_monitor.bpf.c`, `pkg/bpf/loader.go`, `daemon/wip_monitor.go`,
+  `daemon/wip_monitor_test.go`. Smoke on WSL: V3 high-pressure lines show real
+  names (`python3`, `localstack`, …) with **zero** `(unknown)`; thresholds and
+  tier budgets were **not** changed. Full GATE re-measure still pending.
+
 ### Calibration attempt: V3 thresholds (2026-08-04, no threshold change)
 
 - **VM calibration pass** run on the Ubuntu 25.10 target — the v1.7.0 release
