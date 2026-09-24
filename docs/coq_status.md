@@ -1,143 +1,109 @@
 # Coq Formal Verification Status
 
-**Last Updated**: 2025-12-30
-**Coq Version**: 9.1+
-**Compilation Status**: ✅ All files compile successfully with `make verify`
-**Proof Completion**: 60% (29/48 proofs complete, 19 admitted)
-
----
-
-## Overview
-
-The Dwell-Fiber project includes a formal verification framework using the Coq proof assistant.  
-**All Coq files compile successfully**, establishing a solid foundation for mathematical verification.  
-Proof completion is ongoing work.
-
-**Important**: "Compilation success" ≠ "Verification complete"
-- **Compilation**: Coq syntax and type-checking passes ✅
-- **Verification**: All theorems proven with Qed (not Admitted) 🚧 60% complete
+**Last Updated**: 2026-09-24
+**Coq Version**: 8.18.0 (verified; earlier docs claimed "9.1+", which is untested)
+**Compilation Status**: ✅ All 4 files compile via `make verify` (exit 0)
+**Proof Completion**: 100% — 76 declarations, 0 admitted (was 19 admitted)
 
 ---
 
 ## Proof Status Summary
 
-| File | Total Theorems | Complete (Qed) | Admitted | Completion % |
-|------|---------------|----------------|----------|--------------|
-| **dwell_stable.v** | 12 | 6 | 6 | 50% |
-| **dwell_kernel_resilience.v** | 7 | 3 | 4 | 43% |
-| **dwell_extended.v** | 8 | 1 | 7 | 13% |
-| **test_resilience.v** | 21 | 19 | 2 | 90% |
-| **TOTAL** | **48** | **29** | **19** | **60%** |
+| File | Declarations | Admitted | Status |
+|------|--------------|----------|--------|
+| **dwell_stable.v** | 19 (7 lemmas, 12 theorems) | 0 | ✅ complete |
+| **dwell_kernel_resilience.v** | 14 (13 lemmas, 1 theorem) | 0 | ✅ complete |
+| **dwell_extended.v** | 16 (8 lemmas, 8 theorems) | 0 | ✅ complete |
+| **test_resilience.v** | 27 (helpers + tests) | 0 | ✅ complete |
+| **TOTAL** | **76** | **0** | ✅ |
+
+All files also pass `coqchk` independently. `Print Assumptions` on every main
+theorem shows only the declared project parameters/axioms plus the Coq 8.18
+Reals baseline (`ClassicalDedekindReals.sig_forall_dec`,
+`FunctionalExtensionality.functional_extensionality_dep`). No hidden admits.
 
 ---
 
-## Critical Admitted Proofs
+## Corrected statements (2026-09-24)
 
-### dwell_stable.v - ADMM Stability (6 admitted)
-- ✅ `price_nonnegative` - Price always ≥ 0 (PROVEN)
-- ✅ `price_bounded` - Price stays within bounds (PROVEN)
-- `convergence_to_budget` - Price converges to target (requires Banach fixed-point)
-- `liveness_normal_mode` - Convergence in normal operation
-- `liveness_attack_mode` - Price increase under attack
-- `no_starvation` - No false positives blocking legitimate processes
-- `ransomware_detection` - Attack detection guarantee
-- `dwell_fiber_guarantees` - Bundled theorem
+Several admitted theorems were **false as stated**, not just unproven. They were
+corrected rather than admitted. Counterexamples are recorded in the source files.
 
-### dwell_kernel_resilience.v - Event Loss Tolerance (4 admitted)
-- ✅ `update_price_monotonic` - Monotonic price under increased dwell (PROVEN)
-- `bounded_loss_preserves_dwell_bound` - ≥(1-δ) dwell retained under loss
-- `price_update_monotonic_dwell` - Monotonic price updates for streams
-- `bounded_price_under_loss` - Bounded price with event loss
-- `admm_resilience_to_event_loss` - **Main resilience theorem**
+**dwell_stable.v**
+- `convergence_to_budget`, `liveness_normal_mode`: premise `d <= budget`
+  weakened to the false claim; corrected to `d < budget`. Counterexample:
+  `alpha=1, budget=5, d=5, p=10, epsilon=1` — the price stays 10 forever,
+  never entering any epsilon-ball of the budget.
 
-### dwell_extended.v - Liveness & Fairness (7 admitted)
-- ✅ `price_nonnegative` - Price always ≥ 0 (PROVEN)
-- `liveness_normal_operation` - Normal processes eventually below threshold
-- `liveness_under_attack` - Attack processes reach enforcement thresholds
-- `no_livelock` - No infinite loops between throttle/kill thresholds
-- `fair_pricing_theorem` - Equal dwell → equal enforcement
-- `attack_detection_bounded` - Bounded time to detection
-- `enforcement_terminates` - Enforcement eventually triggers
-- `process_safety_nonempty` - Safety property (PID bounds)
+**dwell_kernel_resilience.v**
+- `bounded_loss_preserves_dwell_bound`: the original claim (event-count loss
+  implies proportional dwell preservation) is false without uniform per-event
+  dwell. Counterexample: one event with dwell 100 plus 99 events with dwell
+  0.01; dropping 50% including the large event leaves dwell 0.50, not the
+  claimed ~50.49. The theorem now takes an explicit uniform-dwell premise;
+  the pure event-count bound lives separately in `kept_count_bound`.
+- `admm_resilience_to_event_loss`: the original claim (lossy price within
+  arbitrary epsilon of budget for any valid pattern) is false.
+  Counterexample: `alpha=1, budget=5`, initial price 5, empty stream — the
+  update drives the price to 0, deviation 5 regardless of epsilon. Restated
+  as a Lipschitz bound: loss perturbs the price by at most `alpha × (dwell
+  lost)` relative to the lossless trajectory.
 
----
+**dwell_extended.v**
+- `liveness_normal_operation`: now concludes arrival at a
+  policy-generated terminal clean state (the original made unsupported
+  claims about record flags); requires `d < budget`.
+- `no_livelock`: requires `current_dwell <> budget` (at `d = budget` the
+  price is a fixed point and a process can sit between the thresholds forever).
+- `fair_pricing_theorem`: requires every process's flags to match the
+  deterministic enforcement policy (fairness is a property of the policy,
+  not of arbitrary flag assignments).
+- `process_safety_nonempty`: the original (`pid > 0 -> pid < 65536`) is
+  unprovable — no PID upper bound exists in the model. The honest version
+  takes the OS-enforced bound as an explicit premise and concludes
+  `(0 < pid < 65536)%nat`.
 
-## Why Are Proofs Admitted?
-
-Admitted proofs indicate:
-1. **Framework established**: Structure and types are correct ✅
-2. **Compilation verified**: No syntax or type errors ✅
-3. **Proof strategy identified**: Comments often indicate approach
-4. **Work in progress**: Formal verification is ongoing 🚧
-
-**This is standard practice** in formal verification projects:
-- Establish framework first (compilation)
-- Prove complex theorems iteratively  
-- Admitted = "TODO: Complete proof"
-
----
-
-## Verification Roadmap
-
-### Phase 1: Core Stability (dwell_stable.v) - 6 remaining ✅ 50% complete
-Complete convergence proofs (requires Banach fixed-point theorem from Coq real analysis libraries).
-
-### Phase 2: Resilience Model (dwell_kernel_resilience.v) - 4 remaining ✅ 43% complete
-Prove event loss tolerance with inequality reasoning and stream processing lemmas.
-
-### Phase 3: Extended Properties (dwell_extended.v) - 7 remaining 🚧 13% complete
-Complete liveness, fairness, and attack resistance proofs using temporal logic.
-
-**Total Remaining**: 17 proofs | **Estimated Effort**: 18-24 hours
+**test_resilience.v** (was not in the Makefile; now wired in)
+- `test_valid_loss_pattern_drop_all`: restated with `(n <= max_burst_loss)%nat`.
+  Dropping everything was claimed valid for all `n` when `delta = 1`, but the
+  burst constraint caps consecutive drops regardless of `delta`.
+- `test_valid_loss_pattern_alternating`: restated with `(1/2 <= delta)`. The
+  alternating pattern drops 50% of events, so it needs a matching loss budget;
+  the old `max_burst_loss >= 1` premise was irrelevant.
+- `test_price_increases_with_dwell`: premise strengthened to `d1 < d2` (the
+  strict conclusion was false for `d1 = d2`); fixed `Rmax` unfolding.
+- `test_complete_resilience_scenario`: conclusion uses `INR 10` (the `10.0`
+  literal is unreachable by `reflexivity` since `Rplus` on literals does not
+  compute).
 
 ---
 
-## Production Impact
+## Vacuous placeholders
 
-**Q: Can I use Dwell-Fiber v1.4.2 in production without complete proofs?**
-
-**A: Yes.** The v1.4.2 code is:
-- ✅ Tested with multiple workload modes
-- ✅ Enforcement verified (throttling/killing works)
-- ✅ Metrics and observability functional  
-- ✅ Safety checks in place (protected processes)
-
-**Formal verification provides additional mathematical confidence but is not a prerequisite for deployment.**
-
-The Coq proofs are:
-- **Design validation**: Ensure algorithm properties hold
-- **Long-term guarantee**: Provide mathematical certainty
-- **Research contribution**: Publishable formal verification
+Three closed declarations are true but substantively empty; they are kept
+for API compatibility, not as evidence of verification depth:
+- `dwell_stable.v`: `fairness_enforcement_symmetric` (`P <-> P`, reflexive).
+- `dwell_stable.v`: `fairness_identical_processes` (bare congruence).
+- `dwell_kernel_resilience.v`: `lossy_stream_stability_bridge` (true by
+  definitional unfolding).
 
 ---
 
 ## How to Verify
 
-### Compile All Proofs
 ```bash
 cd coq
-make verify
-```
-
-**Expected output**: All 4 files compile successfully ✅
-
-### Check Admitted Proofs
-```bash
-grep -c "Admitted" *.v
-```
-
-**Current output**:
-```
-dwell_stable.v:6
-dwell_kernel_resilience.v:4
-dwell_extended.v:7
-test_resilience.v:2
-Total: 19 admitted
+make clean && make verify   # exit 0; all 4 files
+coqchk -R . DwellFiber DwellFiber.dwell_stable
+coqchk -R . DwellFiber DwellFiber.dwell_kernel_resilience
+coqchk -R . DwellFiber DwellFiber.dwell_extended
+coqchk -R . DwellFiber DwellFiber.test_resilience
+grep -rn "Admitted\|\badmit\b" --include="*.v" .   # no matches
 ```
 
 ---
 
-**Status**: Framework established ✅ | Proof completion ongoing 🚧 (60% - 29/48 proven)
+**Status**: All proofs complete ✅ (76/76, 0 admitted) under Coq 8.18.0.
 
 For more details, see:
 - `COQ_INSTALLATION.md` - Setup guide

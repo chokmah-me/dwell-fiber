@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
-[![Coq 9.1+](https://img.shields.io/badge/Coq-9.1%2B-blue.svg)](https://coq.inria.fr/)
+[![Coq 8.18](https://img.shields.io/badge/Coq-8.18-blue.svg)](https://coq.inria.fr/)
 [![Version: v1.7.0](https://img.shields.io/badge/Version-v1.7.0-green.svg)](https://github.com/chokmah-me/dwell-fiber/releases/tag/v1.7.0)
 [![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/chokmah-me/dwell-fiber)
 

@@ -2,7 +2,7 @@
 COQC ?= coqc
 COQFLAGS := -R . DwellFiber
 
-VFILES := dwell_stable.v dwell_kernel_resilience.v dwell_extended.v
+VFILES := dwell_stable.v dwell_kernel_resilience.v dwell_extended.v test_resilience.v
 VOFILES := $(VFILES:.v=.vo)
 
 .PHONY: all clean verify
@@ -24,11 +24,17 @@ dwell_kernel_resilience.vo: dwell_kernel_resilience.v dwell_stable.vo
 	$(COQC) $(COQFLAGS) $<
 	@echo "✓ Verified $<"
 
+test_resilience.vo: test_resilience.v dwell_kernel_resilience.vo
+	@echo "Compiling $<..."
+	$(COQC) $(COQFLAGS) $<
+	@echo "✓ Verified $<"
+
 verify: all
 	@echo "✓ Coq proofs verified successfully"
 	@echo "  - dwell_stable.v: ADMM stability"
 	@echo "  - dwell_kernel_resilience.v: Event loss resilience"
 	@echo "  - dwell_extended.v: Liveness, Fairness, Attack Resistance"
+	@echo "  - test_resilience.v: Resilience test suite"
 
 clean:
 	rm -f $(VOFILES) .*.aux *.glob .*.cache

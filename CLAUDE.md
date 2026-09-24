@@ -42,10 +42,13 @@ and `make run` requires root.
 - **Metrics** (`daemon/metrics.go`): Prometheus + web dashboard on port 9090
 
 ### Layer 3: Formal Verification (`coq/`)
-- `dwell_stable.v`: core ADMM stability proofs (29/48 complete, 60%)
+- `dwell_stable.v`: core ADMM stability proofs
 - `dwell_kernel_resilience.v`: event-loss resilience model
 - `dwell_extended.v`: liveness, fairness, attack resistance
-- Guarantees: price stays non-negative (Lemma 3), bounded convergence
+- `test_resilience.v`: resilience test suite
+- Status (2026-09-24): 76/76 declarations proven, 0 admitted, `make verify`
+  exit 0 + `coqchk` clean under Coq 8.18.0. Guarantees: price stays
+  non-negative (Lemma 3), bounded convergence
 
 ---
 

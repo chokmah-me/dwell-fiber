@@ -72,10 +72,11 @@
   cgroups v2 `io.max` throttling + WIP-based killing have landed (see Working).
   Original drafts in `outputs/` (preserved at tags `v3.0.0`–`v3.0.2`) are
   superseded by the integrated daemon above. See `docs/v3-roadmap.md`.
-- **Coq proofs**: 29/48 proven (60%). Framework compiles cleanly. The 19
-  admitted proofs require Banach fixed-point and temporal-logic machinery
-  that is research, not engineering. See `docs/coq_status.md`. No timeline
-  for completion.
+- **Coq proofs**: 76/76 proven, 0 admitted (2026-09-24). All 4 files compile
+  via `make verify` and pass `coqchk` under Coq 8.18.0. Several admitted
+  statements were false as stated and were corrected (counterexamples in
+  `docs/coq_status.md`). Note the model axioms are trusted parameters, not
+  machine-checked facts about the real system.
 
 ## Not happening
 
@@ -112,6 +113,16 @@ There is no committed roadmap. Likely follow-ups, in rough priority order:
      create; userspace prefers it over `/proc`. Smoke: real names, zero
      `(unknown)` on V3 pressure lines. Full `v3_measure.sh` re-run still needed
      to confirm tar → T1 and re-score GATE A/B.
+   - ⚠️ **Blocked 2026-09-24:** re-run attempted on the Linux build VM but the
+     VM's seccomp filter blocks `bpf(2)` entirely (`bpf(BPF_MAP_CREATE)` →
+     EPERM as root); the daemon falls back to simulation mode, so no
+     trustworthy measurement is possible there. Fresh binary (from the CO-RE
+     commit) builds clean and `benign.tar` is pre-generated — the re-run needs
+     a BPF-capable host (the WSL Ubuntu 24.04 guest, where pass 2 and the comm
+     smoke ran). Runbook: `make daemon`, `python3 test/bench.py
+     --prepare-tar`, `./bin/dwell-fiber-daemon --use-v3-wip >
+     /tmp/daemon-v3b.log 2>&1 &`, then `REPO_ROOT=$PWD bash
+     test/v3_measure.sh`.
    - Recalibrate the T2 budget to the real attack rate on the target (~64
      files/s on the WSL guest, not ~223), or use a faster attack workload: the
      1200×1MB probe (WIP ~290) prices at budget 150 while the 2000×1MB bench
