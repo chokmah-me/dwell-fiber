@@ -4,7 +4,28 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Formal verification
+
+- **Coq proofs complete: 76/76 declarations, 0 admitted** (2026-09-24,
+  verified under Coq 8.18.0). All 19 previously-admitted proofs closed across
+  `dwell_stable.v`, `dwell_kernel_resilience.v`, `dwell_extended.v`, and
+  `test_resilience.v` (now wired into the build). Five admitted statements
+  were false as stated and were corrected — `convergence_to_budget` /
+  `liveness_normal_mode` need `d < budget`, `bounded_loss_preserves_dwell_bound`
+  needs uniform dwell, `admm_resilience_to_event_loss` restated as a Lipschitz
+  bound, `no_livelock` needs `d <> budget` (counterexamples in
+  `docs/coq_status.md`). `make verify` exits 0; `coqchk` clean on all four
+  modules; `Print Assumptions` shows only declared parameters/axioms plus the
+  Coq 8.18 Reals baseline.
+
 ### Fixed
+
+- **Fail-closed Coq verification** (2026-09-24). Root `make verify` no longer
+  masks `coqchk` failures behind `|| echo "Verification complete"` — the
+  fallback was hiding a real bug (unqualified module names in the `coqchk`
+  invocation, which never resolved). The invocation now uses fully-qualified
+  `DwellFiber.*` names and fails loudly. `coq/Makefile clean` now also removes
+  `*.vok` / `*.vos` artifacts.
 
 - **V3 tier classification: map-stored `comm`** (2026-08-04). Pass 2 root-caused
   benign tar pricing as T2 because `procComm` only read `/proc/<pid>/comm` and

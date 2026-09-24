@@ -1,55 +1,27 @@
 # Dwell-Fiber TODO List
 
-**Last Updated**: 2025-12-30
-**Project Version**: v1.4.2
-**Status**: Production-ready with ongoing enhancements
+**Last Updated**: 2026-09-24
+**Project Version**: v1.7.0
+**Status**: No committed roadmap — this is a backlog of ideas, not a release plan. See STATUS.md for the honest state of the project.
 
 ---
 
 ## 🔴 CRITICAL (Blockers for Next Release)
 
 ### Coq Formal Verification Completion
-**Priority: MEDIUM | Status: COMPLETE (2026-09-24)**
-**Final Status**: 100% complete (76/76 declarations), 0 admitted — verified under Coq 8.18.0
+**Status: COMPLETE (2026-09-24)** — 76/76 declarations proven, 0 admitted,
+verified under Coq 8.18.0 (`make verify` EXIT 0, `coqchk` clean on all four
+modules, fail-closed). Five admitted statements were false as stated and were
+corrected (counterexamples documented). Committed as `cac475d`, pushed to
+origin `main`.
 
-See `docs/coq_status.md` for detailed proof-by-proof breakdown.
-
-#### Phase 1: Core Stability Proofs (dwell_stable.v) - 6 remaining
-- [x] Complete `price_nonnegative` proof ✅ PROVEN
-- [x] Complete `price_bounded` proof ✅ PROVEN
-- [ ] Complete `convergence_to_budget` proof (requires Banach fixed-point)
-- [ ] Complete `liveness_normal_mode` proof
-- [ ] Complete `liveness_attack_mode` proof
-- [ ] Complete `no_starvation` proof
-- [ ] Complete `ransomware_detection` proof
-- [ ] Complete `dwell_fiber_guarantees` bundled theorem
-
-**Files**: `coq/dwell_stable.v` (50% complete)
-
-#### Phase 2: Resilience Proofs (dwell_kernel_resilience.v) - 4 remaining
-- [x] Complete `update_price_monotonic` proof ✅ PROVEN
-- [ ] Complete `bounded_loss_preserves_dwell_bound` - ≥(1-δ) retention proof
-- [ ] Complete `price_update_monotonic_dwell` - Stream monotonicity proof
-- [ ] Complete `bounded_price_under_loss` - Combine lemmas
-- [ ] Complete `admm_resilience_to_event_loss` - Main theorem (HIGH difficulty)
-- [ ] Complete `resilience_example` - Concrete instantiation
-
-**Files**: `coq/dwell_kernel_resilience.v`
-
-#### Phase 3: Extended Properties (dwell_extended.v) - 10-15 hours
-- [ ] Complete `liveness_attack_eventually_detected` (temporal logic - HIGH difficulty)
-- [ ] Complete `fairness_benign_not_throttled`
-- [ ] Complete `attack_resistance_rapid_encryption`
-- [ ] Complete `safety_protected_processes_never_killed`
-- [ ] Complete `convergence_discrete_time_admm`
-- [ ] Complete `multi_process_fairness`
-- [ ] Complete `bounded_false_positive_rate`
-
-**Files**: `coq/dwell_extended.v`
+See `docs/coq_status.md` for the detailed proof-by-proof breakdown.
 
 ---
 
-## 🟠 HIGH PRIORITY (V1.5.0 Features)
+## 🟠 BACKLOG (uncommitted ideas)
+
+Per STATUS.md there is no committed roadmap — the items below are ideas, not promises.
 
 ### Mid-Dwell Enforcement Timer
 **Estimated: 6-8 hours**
@@ -126,10 +98,10 @@ See `docs/coq_status.md` for detailed proof-by-proof breakdown.
 
 ### V3.0 WIP Architecture
 
-**Status**: Unintegrated drafts in `outputs/`, preserved at tags `v3.0.0`–`v3.0.2` (no active branch)  
-**Checklist**: See `docs/v3-roadmap.md`  
-**Estimated**: 21-33 hours  
-**Priority**: Deferred until v1.5.0 complete
+**Status**: Unintegrated drafts in `outputs/`, preserved at tags `v3.0.0`–`v3.0.2` (no active branch)
+**Checklist**: See `docs/v3-roadmap.md`
+**Estimated**: 21-33 hours
+**Priority**: Frozen pending external pull — see STATUS.md ("Frozen" / "What's next")
 
 ---
 

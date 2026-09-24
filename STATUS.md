@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-08-04 (v1.7.0 + V3 calibration passes 1–2 + map-stored comm)
+**Last updated:** 2026-09-24 (Coq 76/76 complete and pushed to origin; V3 GATE A/B re-measure still needs a BPF-capable host)
 
 ## Working
 
@@ -75,7 +75,8 @@
 - **Coq proofs**: 76/76 proven, 0 admitted (2026-09-24). All 4 files compile
   via `make verify` and pass `coqchk` under Coq 8.18.0. Several admitted
   statements were false as stated and were corrected (counterexamples in
-  `docs/coq_status.md`). Note the model axioms are trusted parameters, not
+  `docs/coq_status.md`). Committed as `cac475d` and pushed to origin `main`
+  the same day (plus `9c58a08`, fail-closed verify hardening). Note the model axioms are trusted parameters, not
   machine-checked facts about the real system.
 
 ## Not happening

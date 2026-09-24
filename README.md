@@ -18,7 +18,9 @@ counters are counted **in-kernel before** the dwell filter. V3 process names
 for tiering come from the BPF `wip_tracker` map (`bpf_get_current_comm` at
 window create), not only `/proc` — required under WSL PID skew. V3 thresholds
 are *starting points* — re-tune on your target before trusting live
-enforcement. See [STATUS.md](STATUS.md) and [CHANGELOG.md](CHANGELOG.md).
+enforcement. Coq proofs are **complete: 76/76 declarations, 0 admitted**
+(Coq 8.18.0), verified fail-closed via `make verify`. See [STATUS.md](STATUS.md)
+and [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
