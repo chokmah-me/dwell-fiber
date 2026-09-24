@@ -37,5 +37,5 @@ verify: all
 	@echo "  - test_resilience.v: Resilience test suite"
 
 clean:
-	rm -f $(VOFILES) .*.aux *.glob .*.cache
+	rm -f $(VOFILES) *.vok *.vos .*.aux *.glob .*.cache
 	@echo "✓ Cleaned"
