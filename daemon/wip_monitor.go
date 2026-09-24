@@ -21,9 +21,14 @@ type WIPMonitor struct {
 }
 
 // NewWIPMonitor attaches the V3 write tracepoint and starts the poll loop.
+// The unique-inode kprobe is attached best-effort: if security_file_open is
+// unavailable on the running kernel, UFM falls back to the opens proxy.
 func NewWIPMonitor(bm *BPFMonitor, ctrl *ControllerV3) (*WIPMonitor, error) {
 	if err := bm.manager.AttachWIPTracepoint(); err != nil {
 		return nil, err
+	}
+	if err := bm.manager.AttachInodeKprobe(); err != nil {
+		log.Printf("⚠️  [V3] inode kprobe unavailable (%v); UFM uses opens proxy", err)
 	}
 	w := &WIPMonitor{
 		bm:     bm,
@@ -59,7 +64,12 @@ func (w *WIPMonitor) loop() {
 
 			for _, s := range samples {
 				tbwMBs := (float64(s.TBWAccum) / 1e6) / elapsed
+				// Prefer the true unique-inode count; fall back to the
+				// opens proxy when the kprobe data is unavailable.
 				ufmPerSec := float64(s.UFMAccum) / elapsed
+				if s.UFMUnique > 0 {
+					ufmPerSec = float64(s.UFMUnique) / elapsed
+				}
 				if tbwMBs == 0 && ufmPerSec == 0 {
 					continue
 				}

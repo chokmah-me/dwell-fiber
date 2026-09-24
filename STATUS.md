@@ -57,8 +57,7 @@
 
 ## Frozen
 
-- **V3.0 full WIP**: the remaining V3 work — true unique-inode UFM (needs
-  CO-RE/vmlinux.h, replaces the opens/s proxy), ML-based tier classification,
+- **V3.0 full WIP**: the remaining V3 work — ML-based tier classification,
   and budget/threshold calibration against *real ransomware samples* (the
   current values are validated only against the synthetic `bench.py` scenarios).
   The 2026-08-04 calibration passes (pass 1: budget 300, benign 542.5 vs

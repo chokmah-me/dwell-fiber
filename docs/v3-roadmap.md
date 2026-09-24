@@ -192,15 +192,22 @@ elif price >= throttle_threshold:
 
 Integrated into the daemon, running in parallel with V2 (observation only):
 
-- **TBW/UFM signals via syscall tracepoints**, not the `kprobe/vfs_write` draft.
-  The current minimal BPF build (`bpf/Makefile`: plain `clang -target bpf`, no
-  BTF/vmlinux.h) cannot compile the draft's `file->f_inode->i_ino` access, and
-  the draft stubbed that out (`inode = 0`). Instead: TBW from
-  `tracepoint/syscalls/sys_enter_write` (`count` arg), UFM as an opens/s proxy
-  from the existing openat hook. Per-PID accumulators in a `wip_tracker` hash
-  map (including `comm[16]` via `bpf_get_current_comm` at window create),
-  polled + reset every 1s in userspace (`daemon/wip_monitor.go` prefers map
-  comm over `/proc` for tiering under PID skew).
+- **TBW/UFM signals via syscall tracepoints**, CO-RE-relocated kernel reads.
+  The BPF program builds hermetically (vendored minimal helper headers, no
+  libbpf-dev/bpftool needed; optional `make -C bpf vmlinux-h` generates a full
+  vmlinux.h from the running kernel's BTF). TBW comes from
+  `tracepoint/syscalls/sys_enter_write` (`count` arg), UFM from a
+  `kprobe/security_file_open` hook that does `BPF_CORE_READ(file, f_inode,
+  i_ino)` — valid there because `do_dentry_open()` assigns `f_inode` before
+  calling it (a kprobe on `vfs_open` entry would be too early). Per-PID
+  accumulators in a `wip_tracker` hash map (including `comm[16]` via
+  `bpf_get_current_comm` at window create), polled + reset every 1s in
+  userspace (`daemon/wip_monitor.go` prefers map comm over `/proc` for tiering
+  under PID skew). Distinct `(pid, ino)` pairs land in the `ufm_inodes` LRU map
+  on successful `sys_exit_openat`; userspace counts them per PID per window for
+  **true unique-inode UFM**, falling back to the opens/s proxy (`ufm_accum`) if
+  the kprobe can't attach. The same inode is now stored in `dwell_value.inode`
+  (previously hardcoded 0), so V2 ring-buffer events carry the real inode too.
 - **Per-tier ADMM controller** in userspace (`daemon/controller_v3.go`) with
   name-based tier classification and `dwell_fiber_v3_*` metrics.
 - **Result**: `bench.py --scenario intermittent` shows `v3_wip`/`v3_price` rising
@@ -227,8 +234,6 @@ stay below `V3ThrottlePrice` while intermittent clears it. Re-tune on the VM.
 
 ### 🚧 Still deferred — see STATUS.md "Frozen"
 
-- **True unique-inode UFM**: requires migrating the BPF build to CO-RE/vmlinux.h
-  to read inodes; replaces the opens/s proxy.
 - ML-based tier classification; calibration against real ransomware samples.
 
 ---

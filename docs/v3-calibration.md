@@ -140,7 +140,7 @@ case: all gates false, no band to place, thresholds stay starting points.
 
 1. **Write filter / TBW.** `count < 4096` skip is not the issue (1 MB writes
    pass). Tracepoint layout verified: `sys_enter_write` `count` is at
-   `offset:32` — the BPF read (`ctx + 32`) is correct, so no fixed offset bug.
+   `offset:32` — the BPF read (`ctx->args[2]`) is correct, so no fixed offset bug.
    Yet `tbw_accum` read 0 on every budget-crossing write workload attempted
    (500×1MB probe, intermittent runs); the only nonzero TBW readings occurred on
    benign phases. Reliability of the write path is unresolved and needs an

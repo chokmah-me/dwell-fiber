@@ -123,11 +123,15 @@ func (bm *BPFManager) AttachWIPTracepoint() error {
 // struct wip_state. Counts are cumulative since the window start; the caller
 // divides by the elapsed window to get per-second rates.
 // Field order matches BPF: window_start_ns, tbw_accum, ufm_accum, comm[16].
+// UFMUnique is the true unique-inode count for the window (from the
+// ufm_inodes LRU map); 0 means the kprobe data is unavailable and the caller
+// should fall back to the opens-proxy UFMAccum.
 type WIPSample struct {
 	PID           uint32
 	WindowStartNs uint64
 	TBWAccum      uint64
 	UFMAccum      uint64
+	UFMUnique     uint64
 	Comm          [16]byte
 }
 
@@ -140,9 +144,50 @@ type wipState struct {
 	Comm          [16]byte
 }
 
+// wipInoKey mirrors the BPF struct wip_ino_key (pid, __pad, ino).
+type wipInoKey struct {
+	PID uint32
+	Pad uint32
+	Ino uint64
+}
+
+// ReadUFMUnique counts distinct inodes opened per PID in the ufm_inodes LRU
+// map and deletes the keys it read, so each poll measures a fresh window.
+// LRU eviction bounds the map if polling ever stops.
+func (bm *BPFManager) ReadUFMUnique() (map[uint32]uint64, error) {
+	m := bm.Collection.Maps["ufm_inodes"]
+	if m == nil {
+		return nil, fmt.Errorf("map 'ufm_inodes' not found")
+	}
+
+	counts := make(map[uint32]uint64)
+	var key wipInoKey
+	var val uint8
+	var keys []wipInoKey
+	iter := m.Iterate()
+	for iter.Next(&key, &val) {
+		counts[key.PID]++
+		keys = append(keys, key)
+	}
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("iterate ufm_inodes: %w", err)
+	}
+
+	for _, k := range keys {
+		kk := k
+		if err := m.Delete(&kk); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
+			log.Printf("UFM reset: delete pid %d ino %d: %v", kk.PID, kk.Ino, err)
+		}
+	}
+	return counts, nil
+}
+
 // ReadWIP snapshots the per-PID WIP accumulators and deletes the entries it read,
 // so each poll measures a fresh window. Entries that reappear before the next
-// poll simply start a new window on their next syscall.
+// poll simply start a new window on their next syscall. The true unique-inode
+// UFM counts from ufm_inodes are merged in; a PID that appears only there
+// (its wip_tracker window was reset between openat-enter and openat-exit)
+// gets a minimal sample with no comm.
 func (bm *BPFManager) ReadWIP() ([]WIPSample, error) {
 	m := bm.Collection.Maps["wip_tracker"]
 	if m == nil {
@@ -173,7 +218,45 @@ func (bm *BPFManager) ReadWIP() ([]WIPSample, error) {
 			log.Printf("WIP reset: delete pid %d: %v", key, err)
 		}
 	}
+
+	// Merge true unique-inode counts. A missing ufm_inodes map (e.g. an old
+	// object without the kprobe program) is not fatal: samples keep
+	// UFMUnique == 0 and callers fall back to the opens proxy.
+	byPID := make(map[uint32]*WIPSample, len(samples))
+	for i := range samples {
+		byPID[samples[i].PID] = &samples[i]
+	}
+	if unique, err := bm.ReadUFMUnique(); err != nil {
+		log.Printf("⚠️  [V3] unique-inode UFM unavailable (%v); using opens proxy", err)
+	} else {
+		for upid, n := range unique {
+			if s, ok := byPID[upid]; ok {
+				s.UFMUnique = n
+			} else {
+				samples = append(samples, WIPSample{PID: upid, UFMUnique: n})
+			}
+		}
+	}
 	return samples, nil
+}
+
+// AttachInodeKprobe attaches the V3 security_file_open kprobe that feeds the
+// true unique-inode UFM signal. Kept separate like AttachWIPTracepoint so it
+// is only attached when V3 observation is enabled (--use-v3-wip). If the
+// symbol is unavailable on the running kernel the caller may treat the error
+// as non-fatal: UFM falls back to the opens-proxy counter.
+func (bm *BPFManager) AttachInodeKprobe() error {
+	prog := bm.Collection.Programs["handle_file_open"]
+	if prog == nil {
+		return fmt.Errorf("program handle_file_open not found")
+	}
+	kp, err := link.Kprobe("security_file_open", prog, nil)
+	if err != nil {
+		return fmt.Errorf("attach security_file_open kprobe: %w", err)
+	}
+	bm.Links = append(bm.Links, kp)
+	log.Println("✓ Attached to security_file_open (V3 unique-inode UFM)")
+	return nil
 }
 
 // StartReader starts reading events from the ring buffer
