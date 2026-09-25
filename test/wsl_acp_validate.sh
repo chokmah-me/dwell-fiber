@@ -81,10 +81,13 @@ RESULTS_DIR="$RESULTS_DIR" REPO_ROOT="$REPO" bash test/v3_measure.sh
 
 printf '\n=== ACP summary ===\n'
 if [ "$CONTROL" = 1 ]; then
-    if curl -s --max-time 2 "$METRICS_URL" | grep -q '^dwell_fiber_v3_acp_phase'; then
-        printf 'UNEXPECTED: phase metric exported in control run (policy should be off)\n'
+    # The phase metric is always exported by design; -1 means "policy disabled"
+    # (see controller_v3.go: acpPhaseGauge.Set(-1)). Check the value, not presence.
+    phase_val=$(curl -s --max-time 2 "$METRICS_URL" | grep '^dwell_fiber_v3_acp_phase' | awk '{print $2}')
+    if [ "$phase_val" = "-1" ]; then
+        printf '(control run OK: acp_phase=-1, policy disabled -- fixed V3 pricing)\n'
     else
-        printf '(control run: no phase metric, as expected -- fixed V3 pricing)\n'
+        printf 'UNEXPECTED: acp_phase=%s in control run (want -1; check for "ACP policy ENABLED" in %s)\n' "$phase_val" "$DAEMON_LOG"
     fi
 else
     curl -s --max-time 2 "$METRICS_URL" | grep '^dwell_fiber_v3_acp_phase' \
