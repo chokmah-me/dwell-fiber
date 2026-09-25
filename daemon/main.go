@@ -25,6 +25,7 @@ func main() {
 	useV3WIP := flag.Bool("use-v3-wip", false, "Run the V3 rate-based WIP detector in parallel (observation only by default)")
 	v3Enforce := flag.Bool("v3-enforce", false, "Enable V3 (WIP) enforcement: io.max throttle high-pressure PIDs (requires --use-v3-wip)")
 	v3EnableKilling := flag.Bool("v3-enable-killing", false, "Enable V3 process killing (requires --v3-enforce; very dangerous!)")
+	acpPolicy := flag.Bool("acp-policy", false, "Enable the ACP cognitive-phase price policy on V3: dampen ADMM during recon/learning, escalate during exploitation (requires --use-v3-wip)")
 	flag.Parse()
 
 	fmt.Println("[SHIELD] Dwell-Fiber Daemon Starting")
@@ -100,6 +101,11 @@ func main() {
 			if *useV3WIP {
 				ctrlV3 := NewControllerV3(*alpha)
 
+				// ACP bridge (opt-in): phase-contingent ADMM modulation.
+				if *acpPolicy {
+					ctrlV3.EnableACPPolicy()
+					fmt.Println("🧠 ACP policy ENABLED: V3 price dampened during recon/learning, escalated during exploitation (see docs/acp-bridge.md)")
+				}
 				// V3 enforcement is opt-in and dry-run by default, mirroring V2.
 				// --v3-enforce arms io.max throttling; --v3-enable-killing is a
 				// second, separate gate for killing. Without --v3-enforce the

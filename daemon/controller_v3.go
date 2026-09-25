@@ -92,6 +92,7 @@ type ProcessStateV3 struct {
 	TBW          float64 // MB/s, last window
 	UFM          float64 // files/s, last window
 	WIP          float64
+	Phase        AttackerPhase // ACP bridge: inferred attacker phase (PhaseUnknown when policy off)
 	LastUpdate   time.Time
 }
 
@@ -117,6 +118,12 @@ type ControllerV3 struct {
 	tierSwitchCounter prometheus.Counter
 	throttledGauge    prometheus.Gauge
 	killedGauge       prometheus.Gauge
+	acpPhaseGauge     prometheus.Gauge
+
+	// ACP bridge (opt-in via EnableACPPolicy / --acp-policy): phase-contingent
+	// ADMM modulation. Nil when disabled -- fixed alpha/budget, today's behavior.
+	acpPolicy   *ACPPolicy
+	acpEstimator *ACPPhaseEstimator
 }
 
 func NewControllerV3(alpha float64) *ControllerV3 {
@@ -156,6 +163,10 @@ func NewControllerV3(alpha float64) *ControllerV3 {
 			Name: "dwell_fiber_v3_killed_count",
 			Help: "Number of processes V3 has killed (0 in observation/dry-run)",
 		}),
+		acpPhaseGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_v3_acp_phase",
+			Help: "ACP bridge: attacker phase of the highest-priced process (0=unknown,1=recon,2=learning,3=exploitation); -1 when the ACP policy is disabled",
+		}),
 	}
 
 	prometheus.MustRegister(c.wipGauge)
@@ -166,8 +177,26 @@ func NewControllerV3(alpha float64) *ControllerV3 {
 	prometheus.MustRegister(c.tierSwitchCounter)
 	prometheus.MustRegister(c.throttledGauge)
 	prometheus.MustRegister(c.killedGauge)
+	prometheus.MustRegister(c.acpPhaseGauge)
+	c.acpPhaseGauge.Set(-1)
 
 	return c
+}
+
+// EnableACPPolicy arms the ACP cognitive-phase price policy (see
+// daemon/acp_policy.go and docs/acp-bridge.md). Per-window, each PID's attacker
+// phase is estimated from its recent rate behavior and the ADMM update is
+// modulated: dampened during recon/learning (the cognitive latency window --
+// observe, don't punish exploration) and escalated during exploitation.
+// Nil-safe on the gauges so tests can build the controller struct directly.
+func (c *ControllerV3) EnableACPPolicy() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.acpPolicy = DefaultACPPolicy()
+	c.acpEstimator = NewACPPhaseEstimator()
+	if c.acpPhaseGauge != nil {
+		c.acpPhaseGauge.Set(0)
+	}
 }
 
 // SetEnforcer attaches an enforcer, switching the controller from observation
@@ -202,7 +231,13 @@ func (c *ControllerV3) CalculateWIP(tier Tier, tbw, ufm float64) float64 {
 
 // updatePriceV3 applies the ADMM update for a single process: price stays >= 0.
 func (c *ControllerV3) updatePriceV3(price, wip, budget float64) float64 {
-	return math.Max(0, price+c.Alpha*(wip-budget))
+	return c.updatePriceV3WithAlpha(c.Alpha, price, wip, budget)
+}
+
+// updatePriceV3WithAlpha is updatePriceV3 with an explicit step size, used by
+// the ACP policy to modulate alpha per attacker phase.
+func (c *ControllerV3) updatePriceV3WithAlpha(alpha, price, wip, budget float64) float64 {
+	return math.Max(0, price+alpha*(wip-budget))
 }
 
 // leak returns the price after one window of multiplicative decay. Snaps small
@@ -242,8 +277,16 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 	st.TBW = tbw
 	st.UFM = ufm
 	st.WIP = c.CalculateWIP(st.CurrentTier, tbw, ufm)
+	// ACP bridge: modulate the ADMM update by inferred attacker phase.
+	alpha, budget := c.Alpha, tierConfigs[st.CurrentTier].Budget
+	if c.acpPolicy != nil {
+		phase := c.acpEstimator.Observe(pid, tbw, ufm, st.WIP, budget)
+		st.Phase = phase
+		aMult, bMult := c.acpPolicy.Modulate(phase)
+		alpha, budget = c.Alpha*aMult, budget*bMult
+	}
 	// Leak first (bleed off prior accumulation), then apply this window's pressure.
-	st.CurrentPrice = c.updatePriceV3(c.leak(st.CurrentPrice), st.WIP, tierConfigs[st.CurrentTier].Budget)
+	st.CurrentPrice = c.updatePriceV3WithAlpha(alpha, c.leak(st.CurrentPrice), st.WIP, budget)
 	st.LastUpdate = time.Now()
 
 	if st.CurrentPrice > 0 {
@@ -268,7 +311,8 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 }
 
 // publishPeak sets the aggregate gauges to the current highest-price process.
-// Caller must hold c.mu.
+// Caller must hold c.mu. Nil-safe on every gauge so tests can construct the
+// controller struct directly without Prometheus registration.
 func (c *ControllerV3) publishPeak() {
 	var peak *ProcessStateV3
 	for _, st := range c.processStates {
@@ -279,11 +323,28 @@ func (c *ControllerV3) publishPeak() {
 	if peak == nil {
 		return
 	}
-	c.wipGauge.Set(peak.WIP)
-	c.priceGauge.Set(peak.CurrentPrice)
-	c.tbwGauge.Set(peak.TBW)
-	c.ufmGauge.Set(peak.UFM)
-	c.tierGauge.Set(peak.CurrentTier.value())
+	if c.wipGauge != nil {
+		c.wipGauge.Set(peak.WIP)
+	}
+	if c.priceGauge != nil {
+		c.priceGauge.Set(peak.CurrentPrice)
+	}
+	if c.tbwGauge != nil {
+		c.tbwGauge.Set(peak.TBW)
+	}
+	if c.ufmGauge != nil {
+		c.ufmGauge.Set(peak.UFM)
+	}
+	if c.tierGauge != nil {
+		c.tierGauge.Set(peak.CurrentTier.value())
+	}
+	if c.acpPhaseGauge != nil {
+		if c.acpPolicy != nil {
+			c.acpPhaseGauge.Set(float64(peak.Phase))
+		} else {
+			c.acpPhaseGauge.Set(-1)
+		}
+	}
 }
 
 // Cleanup removes stale process states and refreshes the peak gauges.
@@ -306,6 +367,17 @@ func (c *ControllerV3) Cleanup() {
 		}
 	}
 	c.publishPeak()
+}
+
+// GetPhase returns the ACP inferred attacker phase for a PID
+// (PhaseUnknown when the policy is disabled or the PID is unseen).
+func (c *ControllerV3) GetPhase(pid int) (AttackerPhase, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if st, exists := c.processStates[pid]; exists {
+		return st.Phase, true
+	}
+	return PhaseUnknown, false
 }
 
 // GetState returns the current state for a PID (for tests / introspection).

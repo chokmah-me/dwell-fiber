@@ -131,4 +131,12 @@ There is no committed roadmap. Likely follow-ups, in rough priority order:
    - Identify and quiet the ambient enumeration source (~679 opens/s, TBW 0,
      short-lived PIDs, price 162.65 at budget 150) that contaminates
      measurement windows on this host (docker/localstack/containerd candidates).
-3. Otherwise: stop.
+3. **ACP bridge (new, 2026-09-25, unvalidated):** `daemon/acp_policy.go` ports
+   the acp-simulation `OptimisticACPDefender` decision logic into V3 as an
+   opt-in `--acp-policy` flag -- per-PID attacker-phase estimation
+   (recon/learning/exploitation) modulating the ADMM update (dampened during
+   the cognitive latency window, escalated on confident exploitation).
+   Unit-tested (`daemon/acp_policy_test.go`); design and honest scope in
+   `docs/acp-bridge.md`. Multipliers uncalibrated; live validation deferred to
+   the WSL re-run in item 2.
+4. Otherwise: stop.

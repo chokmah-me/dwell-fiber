@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **ACP cognitive-phase price policy for V3** (2026-09-25, opt-in
+  `--acp-policy`, requires `--use-v3-wip`). Ports the `OptimisticACPDefender`
+  decision logic from the `acp-simulation` project into the V3 controller
+  (`daemon/acp_policy.go`): each PID's recent rate behavior is classified into
+  an attacker phase -- recon, learning, exploitation -- and the ADMM update is
+  modulated per phase (dampened during the cognitive latency window, escalated
+  on confident exploitation) instead of one fixed alpha/budget. V3-only; V2
+  untouched; disabled by default (bit-identical behavior). Adds the
+  `dwell_fiber_v3_acp_phase` metric. 8 unit tests
+  (`daemon/acp_policy_test.go`); design, concept mapping, and honest scope in
+  `docs/acp-bridge.md`. **Not validated against live workloads** -- multipliers
+  are starting points; live validation deferred to the WSL `v3_measure.sh`
+  re-run.
+
 ### Formal verification
 
 - **Coq proofs complete: 76/76 declarations, 0 admitted** (2026-09-24,

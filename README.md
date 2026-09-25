@@ -18,7 +18,10 @@ counters are counted **in-kernel before** the dwell filter. V3 process names
 for tiering come from the BPF `wip_tracker` map (`bpf_get_current_comm` at
 window create), not only `/proc` — required under WSL PID skew. V3 thresholds
 are *starting points* — re-tune on your target before trusting live
-enforcement. Coq proofs are **complete: 76/76 declarations, 0 admitted**
+enforcement. New: opt-in **ACP cognitive-phase price policy** (`--acp-policy`)
+modulates the V3 ADMM update by inferred attacker phase (recon/learning/
+exploitation) — see [docs/acp-bridge.md](docs/acp-bridge.md); uncalibrated,
+unit-tested only. Coq proofs are **complete: 76/76 declarations, 0 admitted**
 (Coq 8.18.0), verified fail-closed via `make verify`. See [STATUS.md](STATUS.md)
 and [CHANGELOG.md](CHANGELOG.md).
 
@@ -68,6 +71,7 @@ sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
 | **Installation** | [Installation Guide](docs/installation.md) |
 | **V2.x Architecture** | [V2 Architecture](docs/v2-architecture.md) |
 | **V3.0 Roadmap** | [V3 Roadmap](docs/v3-roadmap.md) |
+| **ACP Bridge** | [ACP Cognitive-Phase Policy](docs/acp-bridge.md) |
 | **V3 Calibration** | [V3 Threshold Calibration](docs/v3-calibration.md) |
 | **Benchmarks** | [BENCHMARKS.md](BENCHMARKS.md) |
 | **Project status** | [STATUS.md](STATUS.md) |
