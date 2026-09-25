@@ -31,8 +31,12 @@ printf '=== 3/5 prepare benign.tar ===\n'
 python3 test/bench.py --prepare-tar || die "bench --prepare-tar failed"
 
 printf '=== 4/5 (re)start daemon with --use-v3-wip --acp-policy ===\n'
-pkill -f dwell-fiber-daemon 2>/dev/null || true
+# NOTE: the daemon runs as root (sudo), so killing a previous instance needs sudo too.
+sudo pkill -f dwell-fiber-daemon 2>/dev/null || true
 sleep 2
+if curl -s --max-time 2 "$METRICS_URL" | grep -q '^dwell_fiber_v3_price'; then
+    die "port 9090 still serving after pkill -- is another dwell-fiber-daemon running? (sudo ss -ltnp | grep 9090)"
+fi
 # shellcheck disable=SC2024
 sudo ./bin/dwell-fiber-daemon --use-v3-wip --acp-policy > "$DAEMON_LOG" 2>&1 &
 echo $! > /tmp/daemon-v3b.pid
