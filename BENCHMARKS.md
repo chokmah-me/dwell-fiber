@@ -161,3 +161,30 @@ Same conclusion as the first pass, now with different, root-caused reasons.
 3. Identify the ambient enumeration source (~679 opens/s, TBW 0, price 162.65
    at budget 150; docker/localstack/containerd candidates) before trusting any
    near-floor threshold.
+
+## Third calibration pass (2026-09-25, WSL Ubuntu 24.04, kernel 6.18.33.2-microsoft-standard-WSL2)
+
+First run with the **true unique-inode UFM kprobe actually loading** (the
+CO-RE migration's direct `CORE_READ` of a pt_regs-derived scalar was rejected
+by the verifier — `R1 invalid mem access 'scalar'` — silently forcing
+simulation mode on every run since; fixed with `CORE_READ_PROBE`) and the
+**ACP phase-contingent policy** (`--use-v3-wip --acp-policy`). One command:
+`test/wsl_acp_validate.sh`.
+
+| Arm | P_b (benign tar) | P_i (intermittent) |
+|-----|------------------|--------------------|
+| ACP policy on | 0.0 | **681.37** |
+| Control (fixed pricing) | 0.0 | **344.20** |
+
+`P_i > P_b` → **separation feasible (first feasible pass)**. Calibrated band
+(M = 0.15, R = 2.0): `V3ThrottlePrice = 102.2`, `V3KillPrice = 204.4`; GATE
+A/B/C all pass. The policy's marginal live effect is a ~2× attack-peak lift
+(344.20 → 681.37, ratio 1.98 ≈ exploitation multiplier 2.01) — headroom, not
+feasibility; gates pass with fixed pricing too.
+
+Caveats: `ambient_ceiling_log` was a harness artifact (max over the whole
+daemon log, catching the attack's own peak); true ambient during measurement
+~0, post-measurement ambient ~96 (thin margin vs throttle 102.2) — source
+still unidentified. `P_b = 0.0` may underrepresent heavy legitimate I/O.
+Thresholds not locked into daemon defaults. Full analysis:
+`docs/v3-calibration.md` (pass 3 + control arm).

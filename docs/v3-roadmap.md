@@ -2,7 +2,9 @@
 
 **Status**: 🚧 **Experimental (integrated dual-mode)** — observation + opt-in
 enforcement ship in the main daemon (`--use-v3-wip` / `--v3-enforce`). Threshold
-calibration still open (two infeasible passes). Original drafts preserved at
+calibration still open: three passes, third feasible (2026-09-25: `P_b = 0.0`,
+`P_i = 681.37` → throttle 102.2, kill 204.4, all gates pass) but thresholds not
+yet locked into daemon defaults pending ambient-source identification. Original drafts preserved at
 tags `v3.0.0`–`v3.0.2` / `outputs/`.
 
 V3.0 adds **rate-based I/O pressure** detection (alongside V2 dwell) to catch fast intermittent ransomware attacks.

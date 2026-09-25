@@ -16,9 +16,14 @@ All notable changes to this project are documented in this file.
   untouched; disabled by default (bit-identical behavior). Adds the
   `dwell_fiber_v3_acp_phase` metric. 8 unit tests
   (`daemon/acp_policy_test.go`); design, concept mapping, and honest scope in
-  `docs/acp-bridge.md`. **Not validated against live workloads** -- multipliers
-  are starting points; live validation deferred to the WSL `v3_measure.sh`
-  re-run.
+  `docs/acp-bridge.md`. **Live-validated 2026-09-25** on the WSL host
+  (true-UFM kprobe + policy on): benign `P_b = 0.0`, intermittent
+  `P_i = 681.37`; policy-off control arm on the same host/workload measured
+  `P_i = 344.20` — the policy lifts the attack peak ~2× (ratio 1.98 ≈ the
+  exploitation multiplier 2.01), while all three calibration gates pass
+  with fixed pricing too (policy buys headroom, not feasibility). One-command
+  runs: `test/wsl_acp_validate.sh` (policy on) /
+  `test/wsl_acp_validate.sh --control` (policy off).
 
 ### Formal verification
 
@@ -35,6 +40,26 @@ All notable changes to this project are documented in this file.
   Coq 8.18 Reals baseline.
 
 ### Fixed
+
+- **BPF verifier rejection silently forced simulation mode** (2026-09-25).
+  The CO-RE migration's `handle_file_open` kprobe did a direct
+  `CORE_READ(file, f_inode)` on a pointer loaded from `pt_regs`; the
+  verifier types ctx-loaded values as scalars, so every load since the
+  migration was rejected (`R1 invalid mem access 'scalar'`) and the daemon
+  fell back to simulation mode — all "measurements" in that interval were
+  synthetic. New `CORE_READ_PROBE` macro (`bpf/include/bpf_core_read.h`)
+  routes the chase through `bpf_probe_read_kernel` while keeping the CO-RE
+  relocation (verified by disassembly). Rule: plain `CORE_READ` for
+  verifier-tracked pointers, `CORE_READ_PROBE` for ctx-derived scalars.
+  Found and fixed during the live WSL ACP validation run.
+
+- **`wsl_acp_validate.sh` robustness** (2026-09-25). `sudo pkill` for the
+  root-owned previous daemon (it retained port 9090); liveness check on the
+  V2 metric with a loud SIMULATION-mode warning instead of requiring the V3
+  metric; new `--control` flag for the policy-off baseline arm (results in
+  `/tmp/v3-results-ctrl/`, asserts `acp_phase == -1`); `v3_measure.sh`
+  `ambient_ceiling_from_log` now honors `$DAEMON_LOG` instead of a hardcoded
+  path.
 
 - **Fail-closed Coq verification** (2026-09-24). Root `make verify` no longer
   masks `coqchk` failures behind `|| echo "Verification complete"` — the
@@ -76,6 +101,19 @@ All notable changes to this project are documented in this file.
   `count` offset verified correct at 32 — reliability unresolved, not a fixed
   offset bug); ambient enumeration exceeds the T2 budget. No BPF/controller/WIP
   code changes in this pass.
+
+### Calibration pass 3: feasible GATE A/B/C (2026-09-25, WSL Ubuntu 24.04)
+
+- **First feasible calibration.** With the BPF verifier fix (true unique-inode
+  UFM kprobe loading) and the ACP policy enabled: `P_b = 0.0` (benign tar,
+  correctly T1), `P_i = 681.37` (intermittent ransomware sim). All three
+  gates pass; calibrated band `V3ThrottlePrice = 102.2`, `V3KillPrice = 204.4`
+  (M = 0.15, R = 2.0). **Control arm** (`--acp-policy` off, same host/workload):
+  `P_i = 344.20` — gates pass with fixed pricing too; the policy's marginal
+  live effect is a ~2× attack-peak lift (headroom, not feasibility).
+  Thresholds **not** locked into daemon defaults: post-measurement ambient
+  peaked ~96 vs throttle 102.2 (thin margin), and the ambient enumeration
+  source is still unidentified. See `docs/v3-calibration.md`.
 
 ### Calibration pass 2: T2 budget 150 (2026-08-04, WSL Ubuntu 24.04, still no threshold change)
 

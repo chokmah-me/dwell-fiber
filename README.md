@@ -90,11 +90,18 @@ measured behavior.
 
 **Known gap:** V2 cannot catch fast intermittent encryption (LockBit 3.0
 pattern: <100ms dwell per file across thousands of files). **V3 WIP** is
-integrated in dual mode (`--use-v3-wip` / `--v3-enforce`) but not yet
-threshold-calibrated for safe enforcement on every host — two calibration
-passes measured infeasible separation; map-stored `comm` is the latest tiering
-fix. Original V3 drafts remain at tags `v3.0.0`–`v3.0.2` / `outputs/`. See
-[docs/v3-roadmap.md](docs/v3-roadmap.md), [STATUS.md](STATUS.md).
+integrated in dual mode (`--use-v3-wip` / `--v3-enforce`); the third
+calibration pass (2026-09-25, WSL) measured feasible separation
+(`P_b = 0.0`, `P_i = 681.37` → throttle 102.2, kill 204.4, all gates pass)
+after the BPF verifier fix and the map-stored `comm` tiering fix — but
+thresholds are not yet locked into daemon defaults pending ambient-source
+identification and margin analysis. The **ACP cognitive-phase policy**
+(opt-in `--acp-policy`) modulates V3 pricing by attacker phase; live
+A/B (2026-09-25) showed ~2× attack-peak lift vs fixed pricing (344.20 →
+681.37) with gates passing either way. Original V3 drafts remain at tags
+`v3.0.0`–`v3.0.2` / `outputs/`. See [docs/v3-roadmap.md](docs/v3-roadmap.md),
+[docs/v3-calibration.md](docs/v3-calibration.md), [docs/acp-bridge.md](docs/acp-bridge.md),
+[STATUS.md](STATUS.md).
 
 ---
 

@@ -77,5 +77,13 @@ mirrors IBLT activation concentration as the attacker's memory converges.
    `acp-simulation/results/pricing_validation.json`.
 2. `v3_measure.sh` re-run on the WSL host with `--acp-policy`, comparing
    price trajectories on benign / intermittent / ambient scenarios.
+   **DONE 2026-09-25** -- `P_b = 0.0`, `P_i = 681.37`; policy-off control arm
+   `P_i = 344.20` (same host/workload). ~2x attack-peak lift from the policy
+   (ratio 1.98 ~ exploitation multiplier 2.01); gates pass with fixed pricing
+   too. One-command runs: `test/wsl_acp_validate.sh [--control]`.
 3. Calibrate multipliers (and the phase thresholds) against those runs before
-   trusting enforcement.
+   trusting enforcement. **Partially done** -- the control comparison confirms
+   the exploitation multiplier is behaving as designed; the recon/learning
+   dampening side was not exercised by the live workload (estimator locked to
+   exploitation), so those multipliers remain unvalidated. See
+   `docs/v3-calibration.md`.
