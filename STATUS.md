@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-09-24 (Coq 76/76 complete and pushed to origin; V3 GATE A/B re-measure still needs a BPF-capable host)
+**Last updated:** 2026-09-25 (V3 GATE A/B/C re-measured on WSL: PASS with P_b=0.0, P_i=681.37, throttle=102.2, kill=204.4; BPF verifier fix for the CO-RE kprobe pushed)
 
 ## Working
 

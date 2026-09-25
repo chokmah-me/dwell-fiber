@@ -227,3 +227,64 @@ conclusion as pass 1, different root causes). Follow-ups after this pass: the
 `procComm` map-comm fix is in tree (see CHANGELOG Unreleased); still re-measure
 GATE A/B, re-calibrate T2 budget to the real attack rate (~64 files/s here) or
 use a faster attack workload, and identify the ambient enumeration source.
+
+## Pass 3 (2026-09-25, WSL Ubuntu 24.04, kernel 6.18.33.2-microsoft-standard-WSL2)
+
+First run with the CO-RE **true unique-inode UFM kprobe** actually loading
+(the migration's direct `CORE_READ` of a pt_regs-derived scalar was rejected
+by the verifier — `R1 invalid mem access 'scalar'` — silently forcing
+simulation mode on every run since 818b2d4; fixed by `CORE_READ_PROBE`, which
+routes the chase through `bpf_probe_read_kernel` while keeping the CO-RE
+relocation) **and** the ACP phase-contingent policy enabled
+(`--use-v3-wip --acp-policy`).
+
+`P_b = 0.0`, `P_i = 681.37` → `P_i > P_b`: **separation feasible** (first
+feasible pass; passes 1–2 were infeasible).
+
+| Workload | Signal | Peak `v3_price` | Gate |
+|---|---|---|---|
+| Benign tar extract (T1 after comm fix) | — | **0.0** | A **PASSES** (0.0 < 102.2) |
+| Intermittent ransomware sim (python3, UFM ~340/s, TBW ~240–360 MB/s) | true unique-inode UFM | **681.37** | B **PASSES** (681.37 ≥ 102.2) |
+
+Calibrated band (M = 0.15, R = 2.0): `V3ThrottlePrice = 102.2`,
+`V3KillPrice = 204.4` → GATE C **PASSES** by construction.
+
+### What changed since pass 2 (attribution — single arm, no control)
+
+Four variables moved at once, so the ACP policy's marginal contribution is
+**not isolated** by this run: (1) map-stored comm fix → tar correctly T1,
+`P_b` 199.95 → 0.0; (2) true-UFM kprobe → accurate attack signal (fallback
+opens-counter no longer in play); (3) ACP policy on → exploitation-phase
+escalation (α×1.8, budget×0.85); (4) faster attack workload on this guest
+(UFM ~340/s vs ~64/s in pass 2). The sim (n = 200, controlled) remains the
+evidence for the policy's marginal value (detection 0.155 → 0.620).
+
+Live ACP signature (daemon log, PID 2284 python3): price climbed
+84.95 → 171.24 → 253.98 → 400.26 → 551.10 → 681.37 with *accelerating*
+per-window increments (+86, +83, +146, +151, +130) — consistent with the
+phase estimator locking onto exploitation and escalating α, versus the flat
++95/window that fixed pricing would produce at WIP ≈ 340. Suggestive, not
+conclusive without the phase trajectory or a policy-off control run.
+
+### Caveats
+
+1. **`ambient_ceiling_log = 681.369` is a harness artifact**, not a real
+   ambient measurement: the script takes max(`price=`) over the whole daemon
+   log, which includes the attack's own peak. True ambient during the
+   measurement windows was ~0 (drain-floor hit literal 0 immediately).
+   Post-measurement ambient lines peaked ~96 — below the 102.2 throttle but
+   with thin margin. The ambient enumeration source is **still unidentified**
+   (open since pass 1).
+2. **Single arm** (`--acp-policy` on only). A policy-off control run on the
+   same host/workload is needed to isolate the policy effect and to check
+   time-to-throttle with/without escalation.
+3. `P_b = 0.0` is very clean — the tar workload may underrepresent heavy but
+   legitimate I/O (backups, builds); GATE A margin against those is untested.
+
+### Decision
+
+Record the feasible band (`V3ThrottlePrice = 102.2`, `V3KillPrice = 204.4`);
+do not lock thresholds into daemon defaults until (a) the ambient source is
+identified and its ceiling measured against the throttle with margin, and
+(b) a policy-off control run isolates the ACP contribution. Next: control
+run without `--acp-policy`, then ambient-source hunt.
