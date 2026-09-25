@@ -41,10 +41,17 @@ fi
 sudo ./bin/dwell-fiber-daemon --use-v3-wip --acp-policy > "$DAEMON_LOG" 2>&1 &
 echo $! > /tmp/daemon-v3b.pid
 for i in $(seq 1 30); do
-    curl -s --max-time 2 "$METRICS_URL" | grep -q '^dwell_fiber_v3_price' && break
+    # NOTE: check the V2 metric, not the V3 one -- if BPF fails to load the
+    # daemon falls back to simulation mode and the V3 controller never starts.
+    curl -s --max-time 2 "$METRICS_URL" | grep -q '^dwell_fiber_price' && break
     if [ "$i" = 30 ]; then die "daemon metrics not reachable after 30s; see $DAEMON_LOG"; fi
     sleep 1
 done
+# Warn loudly if we are in simulation mode: V3/ACP measurements are meaningless there.
+if ! curl -s --max-time 2 "$METRICS_URL" | grep -q '^dwell_fiber_v3_price'; then
+    printf '⚠️  WARNING: dwell_fiber_v3_price not exported -- daemon is in SIMULATION mode (BPF failed to load).\n'
+    printf '⚠️  V3/ACP measurements from this run are NOT trustworthy. Check "Failed to load BPF" in %s.\n' "$DAEMON_LOG"
+fi
 printf 'daemon up. ACP phase metric lines exported: '
 curl -s --max-time 2 "$METRICS_URL" | grep -c '^dwell_fiber_v3_acp_phase' || true
 
