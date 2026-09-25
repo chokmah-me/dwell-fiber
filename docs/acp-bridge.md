@@ -53,11 +53,28 @@ mirrors IBLT activation concentration as the attacker's memory converges.
    enumeration), but it also means a real low-and-slow enumerator hides in the
    same bucket. Distinguishing those two is future work.
 
-## Validation path (not done)
+## Validation path
 
-1. Extend the ACP sim with a dwell-fiber-like workload: fixed vs
+1. ~~Extend the ACP sim with a dwell-fiber-like workload: fixed vs
    phase-contingent pricing against IBLT attackers, measuring time-to-detect
-   vs false-positive cost. This is the Python-side half of the bridge.
+   vs false-positive cost. This is the Python-side half of the bridge.~~
+   **DONE 2026-09-25** -- `acp-simulation/src/acp_simulation/bridge/`
+   (`pricing.py`: Go-faithful fixed + phase-contingent controllers;
+   `workload.py`: IBLT `CognitiveAttacker` driving per-window I/O signatures
+   in closed loop with the defender, benign traces under common random
+   numbers; `experiment.py`: paired episode loop + analysis).
+   n=200 episodes: detection rate 0.155 -> **0.620** (paired diff +0.465, 95%
+   CI [0.39, 0.54], d=0.88, p=9e-21); detection delay median 24.5 -> **9.0**
+   windows (paired mean -15.07, CI [-21.61, -9.36], d=-0.89, p<0.0001);
+   false positives/episode 0.865 -> **0.605** (paired diff -0.260,
+   CI [-0.325, -0.195]). Mechanism: under fixed pricing the IBLT attacker
+   learns the throttle boundary and oscillates under the kill threshold;
+   1.8x escalation on confirmed exploitation removes that refuge. Caveat:
+   the FP reduction is partly recon-dampening slowing the ambient
+   contaminant's price climb (it matches the recon signature) -- the policy
+   does not distinguish contaminant from real enumeration. Full write-up:
+   `acp-simulation/docs/bridge-validation.md`; raw JSON in
+   `acp-simulation/results/pricing_validation.json`.
 2. `v3_measure.sh` re-run on the WSL host with `--acp-policy`, comparing
    price trajectories on benign / intermittent / ambient scenarios.
 3. Calibrate multipliers (and the phase thresholds) against those runs before
