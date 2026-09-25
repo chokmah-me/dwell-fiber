@@ -288,3 +288,29 @@ do not lock thresholds into daemon defaults until (a) the ambient source is
 identified and its ceiling measured against the throttle with margin, and
 (b) a policy-off control run isolates the ACP contribution. Next: control
 run without `--acp-policy`, then ambient-source hunt.
+
+### Control arm (2026-09-25, `--acp-policy` OFF, same host + workload)
+
+Run via `test/wsl_acp_validate.sh --control` (fixed V3 pricing, results in
+`/tmp/v3-results-ctrl/`): `P_b = 0.0`, `P_i = 344.20`.
+
+Head-to-head on the intermittent peak:
+
+| Arm | P_i | vs throttle 102.2 |
+|---|---|---|
+| Fixed pricing (control) | 344.20 | B passes (3.4×) |
+| ACP policy | 681.37 | B passes (6.7×) |
+
+**The gates pass with fixed pricing too.** The policy's marginal live effect
+is a ~2.0× lift of the attack peak (344.20 → 681.37, ratio 1.98) — matching
+the exploitation multiplier almost exactly:
+`(0.9·(340−127.5))/(0.5·(340−150)) ≈ 2.01`. The estimator locked onto
+exploitation quickly and stayed there; no recon/learning dampening is visible
+in the peak. Honest reading: the policy buys *headroom*, not feasibility —
+the separation itself comes from the true-UFM kprobe + comm fix.
+
+Harness fixes from this comparison: (1) `ambient_ceiling_from_log` hardcoded
+`/tmp/daemon-v3b.log`, so the control run reported the ACP run's ceiling;
+now honors `$DAEMON_LOG`. (2) The `--control` summary asserted on metric
+*presence*; the phase gauge is exported by design with −1 = disabled — now
+asserts on the value.

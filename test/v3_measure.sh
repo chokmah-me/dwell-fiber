@@ -51,7 +51,7 @@ price_lt() {
 
 ambient_ceiling_from_log() {
     set +e
-    grep -oa 'price=[0-9.]*' /tmp/daemon-v3b.log 2>/dev/null \
+    grep -oa 'price=[0-9.]*' "${DAEMON_LOG:-/tmp/daemon-v3b.log}" 2>/dev/null \
         | cut -d= -f2 \
         | sort -n \
         | tail -1

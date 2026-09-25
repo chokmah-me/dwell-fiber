@@ -77,7 +77,7 @@ printf 'daemon up. ACP phase metric lines exported: '
 curl -s --max-time 2 "$METRICS_URL" | grep -c '^dwell_fiber_v3_acp_phase' || true
 
 printf '=== 5/5 v3_measure.sh (takes ~10-15 min) ===\n'
-RESULTS_DIR="$RESULTS_DIR" REPO_ROOT="$REPO" bash test/v3_measure.sh
+RESULTS_DIR="$RESULTS_DIR" REPO_ROOT="$REPO" DAEMON_LOG="$DAEMON_LOG" bash test/v3_measure.sh
 
 printf '\n=== ACP summary ===\n'
 if [ "$CONTROL" = 1 ]; then
