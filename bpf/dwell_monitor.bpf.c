@@ -210,11 +210,14 @@ int handle_file_open(struct pt_regs *ctx) {
 	if (!file) {
 		return 0;
 	}
-	struct inode *ip = CORE_READ(file, f_inode);
+	/* file came out of pt_regs, so the verifier types it as a scalar:
+	 * chase the pointers with probe reads (CO-RE offsets preserved),
+	 * not direct dereference. */
+	struct inode *ip = CORE_READ_PROBE(file, f_inode);
 	if (!ip) {
 		return 0;
 	}
-	__u64 ino = CORE_READ(ip, i_ino);
+	__u64 ino = CORE_READ_PROBE(ip, i_ino);
 	if (!ino) {
 		return 0;
 	}
