@@ -42,6 +42,7 @@ TIER_CONFIGS = {
 
 METRICS_URL = "http://localhost:9090/metrics"
 V3_PRICE_METRIC = "dwell_fiber_v3_price"
+V3_PHASE_METRIC = "dwell_fiber_v3_acp_phase"
 
 
 def leak_price(price: float, leak: float = DEFAULT_LEAK) -> float:
@@ -244,11 +245,11 @@ def simulate(
     }
 
 
-def scrape_v3_price(url: str = METRICS_URL, timeout: float = 2.0) -> float:
-    """Fetch dwell_fiber_v3_price from Prometheus text exposition."""
+def _scrape_text(url: str = METRICS_URL, timeout: float = 2.0) -> str:
+    """Fetch the raw Prometheus text exposition from the daemon."""
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
-            text = r.read().decode("utf-8", errors="replace")
+            return r.read().decode("utf-8", errors="replace")
     except urllib.error.URLError as e:
         raise RuntimeError(f"scrape failed for {url}: {e}") from e
     except TimeoutError as e:
@@ -256,6 +257,9 @@ def scrape_v3_price(url: str = METRICS_URL, timeout: float = 2.0) -> float:
     except OSError as e:
         raise RuntimeError(f"scrape OS error for {url}: {e}") from e
 
+
+def _parse_metric(text: str, name: str) -> Optional[float]:
+    """Parse one gauge value out of Prometheus text exposition; None if absent."""
     found = None
     for line in text.splitlines():
         if line.startswith("#") or not line.strip():
@@ -263,14 +267,20 @@ def scrape_v3_price(url: str = METRICS_URL, timeout: float = 2.0) -> float:
         parts = line.split()
         if len(parts) < 2:
             continue
-        name = parts[0].split("{", 1)[0]
-        if name == V3_PRICE_METRIC:
+        metric_name = parts[0].split("{", 1)[0]
+        if metric_name == name:
             try:
                 found = float(parts[-1])
             except ValueError as e:
                 raise RuntimeError(
-                    f"could not parse {V3_PRICE_METRIC} value from: {line!r}"
+                    f"could not parse {name} value from: {line!r}"
                 ) from e
+    return found
+
+
+def scrape_v3_price(url: str = METRICS_URL, timeout: float = 2.0) -> float:
+    """Fetch dwell_fiber_v3_price from Prometheus text exposition."""
+    found = _parse_metric(_scrape_text(url, timeout), V3_PRICE_METRIC)
     if found is None:
         raise RuntimeError(
             f"{V3_PRICE_METRIC} not found in {url} "
@@ -279,22 +289,47 @@ def scrape_v3_price(url: str = METRICS_URL, timeout: float = 2.0) -> float:
     return found
 
 
+def scrape_v3_phase(url: str = METRICS_URL, timeout: float = 2.0) -> Optional[float]:
+    """Fetch dwell_fiber_v3_acp_phase; None when not exported.
+
+    -1 means the ACP policy is disabled (gauge is registered unconditionally);
+    0=unknown, 1=recon, 2=learning, 3=exploitation when the policy is on.
+    """
+    return _parse_metric(_scrape_text(url, timeout), V3_PHASE_METRIC)
+
+
 def from_metrics(
     duration_s: float = 5.0,
     interval_s: float = 0.5,
     url: str = METRICS_URL,
 ) -> Dict[str, Any]:
-    """Poll metrics for duration_s; return peak and last price."""
+    """Poll metrics for duration_s; return peak/last price plus the full series.
+
+    The "series" list holds one {"t", "price", "acp_phase"} dict per sample
+    (t = seconds since poll start), so time-to-threshold and the phase
+    trajectory can be analyzed offline. "samples" remains the sample count
+    for backward compatibility.
+    """
     t0 = time.time()
     peak = 0.0
     last = 0.0
-    samples = 0
+    series = []
     while True:
-        last = scrape_v3_price(url)
-        samples += 1
+        now = time.time()
+        text = _scrape_text(url)
+        last = _parse_metric(text, V3_PRICE_METRIC)
+        if last is None:
+            raise RuntimeError(
+                f"{V3_PRICE_METRIC} not found in {url} "
+                "(is the daemon running with --use-v3-wip?)"
+            )
+        phase = _parse_metric(text, V3_PHASE_METRIC)
         if last > peak:
             peak = last
-        elapsed = time.time() - t0
+        series.append(
+            {"t": round(now - t0, 3), "price": last, "acp_phase": phase}
+        )
+        elapsed = now - t0
         if elapsed >= duration_s:
             break
         time.sleep(min(interval_s, max(0.0, duration_s - elapsed)))
@@ -302,9 +337,10 @@ def from_metrics(
         "metric": V3_PRICE_METRIC,
         "url": url,
         "duration_s": duration_s,
-        "samples": samples,
+        "samples": len(series),
         "peak_price": peak,
         "final_price": last,
+        "series": series,
     }
 
 
