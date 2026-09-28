@@ -2,32 +2,41 @@
 """wsl_phase_workload.py -- three-phase synthetic workload to exercise the ACP
 phase estimator live on the WSL host.
 
-Run while the V3 daemon is up (any arm), then watch the estimator:
+Run while the V3 daemon is up with --acp-policy, then watch:
   watch -n1 'curl -s localhost:9090/metrics | grep -E "acp_phase|v3_price |v3_ufm "'
 
-Requires --acp-policy for the phase metric (dwell_fiber_v3_acp_phase:
-0=unknown 1=recon 2=learning 3=exploitation); without it, watch v3_price/v3_ufm.
+The phase sequence below is validated against the REAL estimator in
+daemon/acp_workload_test.go (synthetic window sequences -> recon -> learning
+-> exploitation). T2 numbers (python3 is untiered -> T2): budget=150,
+wip = 0.3*tbw + 0.7*ufm.
 
-Phases (40 s each, markers printed with timestamps for correlation):
-  1. RECON:        paced file enumeration (~150 opens/s, no reads/writes).
-                   Expect: PhaseRecon (dampened: alpha x0.4).
-  2. LEARNING:     repeated full reads of a fixed 50-file set with shrinking
-                   sleep jitter (variance collapses over the phase).
-                   Expect: PhaseLearning once CV shrinks over-budget.
-  3. EXPLOITATION: steady sustained writes (256 KiB files in a loop).
-                   Expect: PhaseExploitation (escalated: alpha x1.8).
+Phases (markers printed with timestamps for correlation):
+  1. RECON (40 s):        paced file enumeration, ~150 opens/s, no writes.
+                          WIP ~105 < 150 -> PhaseRecon (dampened x0.4).
+  2. LEARNING (60 s):     file churn (create/write 8 KiB/delete) at mean ~280
+                          files/s, per-window target jitter shrinking 55% ->
+                          35%. WIP ~196 > 150 with collapsing variance ->
+                          PhaseLearning. Jitter stays above the 0.25 CV
+                          exploitation line, so it should NOT escalate yet.
+  3. EXPLOITATION (40 s): same churn, steady at ~280 files/s (+-5%).
+                          Stable over-budget -> PhaseExploitation (x1.8).
 
-All writes go under /tmp/dwell-fiber-phase-test/ and are removed afterwards.
-Read-only phase walks /usr (no writes anywhere else).
+All churn files live under /tmp/dwell-fiber-phase-test/ and are unlinked as
+they are created; the directory is removed afterwards.
 """
 import os
+import random
+import shutil
 import sys
 import time
-import random
 
-PHASE_SECS = 40
+P1_SECS = 40
+P2_SECS = 60
+P3_SECS = 40
 WORKDIR = "/tmp/dwell-fiber-phase-test"
-ENUM_TARGET_OPENS_PER_SEC = 150
+ENUM_OPENS_PER_SEC = 150
+CHURN_MEAN_PER_SEC = 280
+CHUNK = b"x" * (8 * 1024)  # 8 KiB: TBW ~2.2 MB/s at 280/s (above the 1.0 recon cap)
 
 
 def stamp(msg):
@@ -45,9 +54,9 @@ def iter_files(root, limit):
 
 
 def phase_recon():
-    stamp("PHASE 1/3 RECON: paced enumeration (~150 opens/s, no reads/writes)")
-    deadline = time.time() + PHASE_SECS
-    interval = 1.0 / ENUM_TARGET_OPENS_PER_SEC
+    stamp("PHASE 1/3 RECON: paced enumeration (~150 opens/s, no writes)")
+    deadline = time.time() + P1_SECS
+    interval = 1.0 / ENUM_OPENS_PER_SEC
     count = 0
     it = iter_files("/usr", 20000)
     while time.time() < deadline:
@@ -66,59 +75,54 @@ def phase_recon():
         dt = time.time() - t0
         if dt < interval:
             time.sleep(interval - dt)
-    stamp(f"  recon done: {count} opens")
+    stamp(f"  recon done: {count} opens (expect phase=1, dampened price)")
 
 
-def phase_learning():
-    stamp("PHASE 2/3 LEARNING: repeated reads of a fixed set, shrinking jitter")
-    files = [p for p, _ in zip(iter_files("/usr", 50), range(50))]
-    if not files:
-        stamp("  no files found; skipping"); return
-    deadline = time.time() + PHASE_SECS
-    start = time.time()
-    rounds = 0
-    while time.time() < deadline:
-        elapsed = time.time() - start
-        # jitter shrinks linearly: 50ms -> 5ms (variance collapse = learning signal)
-        jitter = 0.050 * (1 - elapsed / PHASE_SECS) + 0.005
-        for path in files:
-            try:
-                with open(path, "rb") as f:
-                    f.read()
-            except OSError:
-                pass
-            time.sleep(random.uniform(0, jitter))
-            if time.time() >= deadline:
-                break
-        rounds += 1
-    stamp(f"  learning done: {rounds} read rounds over {len(files)} files")
+def churn_window(target_ops):
+    """One second of create/write/unlink churn; returns ops completed."""
+    done = 0
+    for i in range(target_ops):
+        path = os.path.join(WORKDIR, f"c-{done}-{i}.dat")
+        try:
+            with open(path, "wb") as f:
+                f.write(CHUNK)
+            os.unlink(path)
+            done += 1
+        except OSError:
+            pass
+    return done
 
 
-def phase_exploitation():
-    stamp("PHASE 3/3 EXPLOITATION: steady sustained writes")
+def phase_churn(secs, jitter_start, jitter_end, label, expect):
+    stamp(f"{label}: file churn ~{CHURN_MEAN_PER_SEC}/s, "
+          f"jitter {jitter_start:.0%} -> {jitter_end:.0%}")
     os.makedirs(WORKDIR, exist_ok=True)
-    deadline = time.time() + PHASE_SECS
-    chunk = os.urandom(256 * 1024)
-    i = 0
-    bytes_written = 0
+    deadline = time.time() + secs
+    start = time.time()
+    total = 0
     while time.time() < deadline:
-        path = os.path.join(WORKDIR, f"p3-{i % 64}.dat")
-        with open(path, "wb") as f:
-            f.write(chunk)
-        bytes_written += len(chunk)
-        i += 1
-        time.sleep(0.05)  # ~5 MB/s steady
-    stamp(f"  exploitation done: {i} files, {bytes_written / 1e6:.1f} MB written")
+        w0 = time.time()
+        elapsed = w0 - start
+        j = jitter_start + (jitter_end - jitter_start) * (elapsed / secs)
+        target = int(CHURN_MEAN_PER_SEC * (1 + random.uniform(-j, j)))
+        total += churn_window(max(target, 1))
+        dt = time.time() - w0
+        if dt < 1.0:
+            time.sleep(1.0 - dt)
+    stamp(f"  done: {total} churn ops ({expect})")
 
 
 def main():
-    stamp("starting 3-phase workload (~2 min total)")
+    stamp("starting 3-phase workload (~2.3 min total)")
     try:
         phase_recon()
-        phase_learning()
-        phase_exploitation()
+        phase_churn(P2_SECS, 0.55, 0.35,
+                    "PHASE 2/3 LEARNING",
+                    "expect phase=2 while variance collapses")
+        phase_churn(P3_SECS, 0.05, 0.05,
+                    "PHASE 3/3 EXPLOITATION",
+                    "expect phase=3, escalated price")
     finally:
-        import shutil
         shutil.rmtree(WORKDIR, ignore_errors=True)
     stamp("workload complete; workdir cleaned")
 
