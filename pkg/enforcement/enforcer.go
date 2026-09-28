@@ -5,10 +5,16 @@ import (
 	"time"
 )
 
+// SafetyCheckerInterface allows mocking in tests
+type SafetyCheckerInterface interface {
+	CanEnforce(pid int, cmd string) (bool, string)
+	IsAlive(pid int) bool
+}
+
 // Enforcer coordinates throttling and killing
 type Enforcer struct {
 	config    *Config
-	checker   *SafetyChecker
+	checker   SafetyCheckerInterface
 	throttler *Throttler
 	killer    *Killer
 }
@@ -16,6 +22,16 @@ type Enforcer struct {
 // NewEnforcer creates a new enforcer
 func NewEnforcer(config *Config) *Enforcer {
 	checker := NewSafetyChecker(config)
+	return &Enforcer{
+		config:    config,
+		checker:   checker,
+		throttler: NewThrottler(config, checker),
+		killer:    NewKiller(config, checker),
+	}
+}
+
+// NewEnforcerWithChecker creates an enforcer with a custom safety checker (for tests)
+func NewEnforcerWithChecker(config *Config, checker SafetyCheckerInterface) *Enforcer {
 	return &Enforcer{
 		config:    config,
 		checker:   checker,

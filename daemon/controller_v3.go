@@ -307,15 +307,16 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// If the PID is dead, drop its state and skip. The BPF sample reflects
-	// I/O from a process that has already exited; enforcing would chase a
-	// ghost, and retaining the price lets a reused PID inherit a stale
-	// baseline (observed 2026-09-28: the daemon tried to throttle dead PIDs
-	// while the live attack ran unimpeded).
+	// Note: we do NOT drop samples for dead PIDs here. The I/O happened;
+	// the price should reflect it. The enforcer (not the sampler) is
+	// responsible for skipping enforcement on PIDs that exited before the
+	// throttle could be applied. Dropping here would blind us to short-lived
+	// processes entirely.
 	startTime, err := c.startTimeFunc(pid)
 	if err != nil {
-		delete(c.processStates, pid)
-		return
+		// PID is dead; use startTime 0 to indicate unknown. The price still
+		// updates, but enforcement will skip (see EnforceWIP).
+		startTime = 0
 	}
 
 	st, ok := c.processStates[pid]

@@ -8,6 +8,18 @@ import (
 	"testing"
 )
 
+// mockChecker always allows enforcement (for testing band logic without
+// needing live PIDs).
+type mockChecker struct{}
+
+func (m *mockChecker) CanEnforce(pid int, cmd string) (bool, string) {
+	return true, ""
+}
+
+func (m *mockChecker) IsAlive(pid int) bool {
+	return true
+}
+
 // captureOutput runs fn with os.Stdout redirected and returns what was printed.
 func captureOutput(fn func()) string {
 	old := os.Stdout
@@ -33,9 +45,9 @@ func throttleOnlyConfig() *Config {
 	return c
 }
 
-// NoSuchPID is guaranteed absent so no kernel action can occur; the
-// "[io] Throttling" intent line prints before any cgroup work, so stdout
-// still records whether the throttle branch ran.
+// NoSuchPID is guaranteed absent so no kernel action can occur. Note: the
+// throttler now gracefully skips dead PIDs (returns nil without logging),
+// so tests that verify the throttle *decision* logic must use a live PID.
 const NoSuchPID = 1 << 30
 
 // TestEnforceWIPThrottleNotShadowedByKillBand is the item-6 regression test:
@@ -44,7 +56,9 @@ const NoSuchPID = 1 << 30
 // first and returned early, so the throttle never fired and the attack ran
 // unimpeded while the log filled with dry-run kill lines.
 func TestEnforceWIPThrottleNotShadowedByKillBand(t *testing.T) {
-	e := NewEnforcer(throttleOnlyConfig())
+	// Use a mock checker so the throttle intent is logged even for a fake PID.
+	// This verifies the band decision logic, not the safety check.
+	e := NewEnforcerWithChecker(throttleOnlyConfig(), &mockChecker{})
 	out := captureOutput(func() {
 		if err := e.EnforceWIP(NoSuchPID, "bench", 470.0); err != nil {
 			t.Fatalf("EnforceWIP: %v", err)
@@ -61,7 +75,7 @@ func TestEnforceWIPThrottleNotShadowedByKillBand(t *testing.T) {
 // TestEnforceWIPThrottleBandDisarmed: price between the bands throttles and
 // does not log kill intent.
 func TestEnforceWIPThrottleBandDisarmed(t *testing.T) {
-	e := NewEnforcer(throttleOnlyConfig())
+	e := NewEnforcerWithChecker(throttleOnlyConfig(), &mockChecker{})
 	out := captureOutput(func() {
 		if err := e.EnforceWIP(NoSuchPID, "bench", 150.0); err != nil {
 			t.Fatalf("EnforceWIP: %v", err)

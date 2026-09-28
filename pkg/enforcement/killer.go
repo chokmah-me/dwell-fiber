@@ -10,14 +10,14 @@ import (
 // Killer manages process termination
 type Killer struct {
 	config  *Config
-	checker *SafetyChecker
+	checker SafetyCheckerInterface
 	
 	// Track killed processes
 	killed map[int]time.Time
 }
 
 // NewKiller creates a new killer
-func NewKiller(config *Config, checker *SafetyChecker) *Killer {
+func NewKiller(config *Config, checker SafetyCheckerInterface) *Killer {
 	return &Killer{
 		config: config,
 		checker: checker,

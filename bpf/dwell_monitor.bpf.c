@@ -234,8 +234,6 @@ int handle_openat_enter(struct trace_event_raw_sys_enter *ctx) {
 
 	(void)ctx;
 
-	bpf_printk("dwell: openat pid=%d\n", pid);
-
 	bpf_map_update_elem(&pid_activity, &pid, &now, BPF_ANY);
 
 	/* V3: count this open as a files-modified event for the WIP window.

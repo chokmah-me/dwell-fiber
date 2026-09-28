@@ -13,7 +13,7 @@ import (
 // Throttler manages CPU throttling via cgroups v2
 type Throttler struct {
 	config  *Config
-	checker *SafetyChecker
+	checker SafetyCheckerInterface
 
 	// Track throttled processes
 	throttled        map[int]time.Time
@@ -21,7 +21,7 @@ type Throttler struct {
 }
 
 // NewThrottler creates a new throttler
-func NewThrottler(config *Config, checker *SafetyChecker) *Throttler {
+func NewThrottler(config *Config, checker SafetyCheckerInterface) *Throttler {
 	return &Throttler{
 		config:    config,
 		checker:   checker,
@@ -41,6 +41,12 @@ func (t *Throttler) Throttle(pid int, cmd string, dwell time.Duration) error {
 	// Safety check
 	canEnforce, reason := t.checker.CanEnforce(pid, cmd)
 	if !canEnforce {
+		// The process exited between the BPF sample and the throttle attempt.
+		// This is not a failure; there's simply nothing to throttle. Skip
+		// gracefully instead of returning an error.
+		if reason == "process no longer exists" {
+			return nil
+		}
 		return fmt.Errorf("cannot throttle: %s", reason)
 	}
 
@@ -120,6 +126,11 @@ func (t *Throttler) ThrottleIO(pid int, cmd, reason string) error {
 
 	canEnforce, sreason := t.checker.CanEnforce(pid, cmd)
 	if !canEnforce {
+		// The process exited between the BPF sample and the throttle attempt.
+		// Skip gracefully; there's nothing to throttle.
+		if sreason == "process no longer exists" {
+			return nil
+		}
 		return fmt.Errorf("cannot throttle: %s", sreason)
 	}
 
