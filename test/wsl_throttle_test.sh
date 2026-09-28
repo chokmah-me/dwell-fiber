@@ -10,8 +10,14 @@
 #     cd ~/dwell-fiber && bash test/wsl_throttle_test.sh
 #
 # Does: git pull, make daemon, prepare benign.tar, (re)start the daemon with
-#   --use-v3-wip --v3-enforce, benign window, drain, armed intermittent loop,
-#   hard-gate assertions, summary.
+#   --use-v3-wip --v3-enforce, benign window, drain, armed attack (relaunch
+#   loop until the throttle engages, then a 20s throttled-state evidence
+#   window), hard-gate assertions, summary.
+#
+# Why a relaunch loop instead of N bench runs: the 1 MB/s io.max cap grinds
+# the 350 MB/s bench to ~1 file/s once engaged, so a fixed number of full
+# runs would take hours. The loop sustains pressure only until the throttle
+# is confirmed, then stops the attack.
 #
 # Hard gates (any FAIL => exit 1):
 #   1. attack throttled: dwell_fiber_v3_throttled_count rises during the
@@ -24,8 +30,9 @@
 #   4. benign tar untouched: tar exits 0 and throttled_count is unchanged
 #      across the benign window
 # Supporting evidence (reported, not gating -- host-dependent):
-#   - io.stat write rate for the slice while throttled (cap => ~1 MB/s)
-#   - achieved files/s per bench iteration (should sag as writeback chokes)
+#   - time-to-throttle: seconds from attack start to first throttle
+#   - throttled 20s window: slice io.stat write rate (cap => ~1 MB/s) and
+#     files written (= effective attack rate under the throttle)
 #
 # Safety notes (verified against pkg/enforcement on 2026-09-28):
 #   - Killer.KillNow checks KillEnabled FIRST: with --v3-enable-killing off it
@@ -35,7 +42,7 @@
 #     in EnforceWIP only skips re-throttling, it does not un-throttle).
 #   - SafetyChecker refuses protected PIDs/cmds and the daemon itself.
 #
-# Needs: sudo (eBPF + cgroups), curl, python3. Takes ~6-10 minutes.
+# Needs: sudo (eBPF + cgroups), curl, python3. Takes ~4-7 minutes.
 # FAILS CLOSED if the daemon is in simulation mode or not armed throttle-only.
 set -u
 export LC_ALL=C
@@ -49,7 +56,6 @@ KILL_PRICE=204.4
 EXPECTED_WBPS=1048576
 DRAIN_THRESHOLD=50
 DRAIN_TIMEOUT_S=120
-BENCH_LOOPS="${BENCH_LOOPS:-8}"
 INTERMITTENT_RATE="${INTERMITTENT_RATE:-350}"
 BENCH_WORKDIR="${BENCH_WORKDIR:-/tmp/dwell-fiber-bench}"
 CGROUP_SLICE="/sys/fs/cgroup/dwell-fiber-v3.slice"
@@ -182,14 +188,19 @@ printf '=== drain before attack window ===\n'
 drain
 
 # ============ phase B: intermittent attack (armed) ============
-printf '=== 6/7 phase B: intermittent bench x%s (ARMED) ===\n' "$BENCH_LOOPS"
+printf '=== 6/7 phase B: intermittent attack (ARMED) ===\n'
+printf 'NOTE: the 1 MB/s io.max cap grinds the 350 MB/s bench to ~1 file/s once\n'
+printf '      the throttle engages -- that collapse IS the gate working. So the\n'
+printf '      attack runs in a relaunch loop only until the throttle is\n'
+printf '      confirmed (a single 2000-file run may finish before the price\n'
+printf '      crosses 102.2); then we measure the throttled state and stop it.\n'
 thr_before_b=$(metric dwell_fiber_v3_throttled_count); thr_before_b="${thr_before_b:-0}"
 kill_before_b=$(metric dwell_fiber_v3_killed_count); kill_before_b="${kill_before_b:-0}"
-w0=$(io_wbytes); w0="${w0:-0}"; t0=$(date +%s)
-sample_max_price 600 "$RESULTS_DIR/peak-intermittent.txt" &
+t0=$(date +%s)
+sample_max_price 900 "$RESULTS_DIR/peak-intermittent.txt" &
 sampler_pid=$!
-# Watch the throttle slice's membership during the attack: the bench PID is
-# moved in mid-run and exits at loop end, so sampling between loops would
+# Watch the throttle slice's membership during the attack: a bench PID is
+# moved in mid-run and exits at iteration end, so sampling between runs would
 # miss it. Any PID ever seen here during phase B = a live throttle.
 : > "$RESULTS_DIR/slice_pids.txt"
 ( while true; do
@@ -197,31 +208,64 @@ sampler_pid=$!
     sleep 1
 done ) &
 watcher_pid=$!
-: > "$RESULTS_DIR/achieved.txt"
 : > "$RESULTS_DIR/bench-intermittent.log"
-for i in $(seq 1 "$BENCH_LOOPS"); do
-    set +e
-    out=$(python3 test/bench.py --scenario intermittent \
-        --intermittent-rate "$INTERMITTENT_RATE" --workdir "$BENCH_WORKDIR" 2>&1)
-    rc=$?
-    set -e
-    rate=$(printf '%s' "$out" | grep -oE 'achieved [0-9]+ files/s' | grep -oE '[0-9]+' | head -1)
-    printf '  loop %s/%s: exit=%s achieved=%s files/s\n' "$i" "$BENCH_LOOPS" "$rc" "${rate:-?}"
-    printf '%s %s\n' "$i" "${rate:-?}" >> "$RESULTS_DIR/achieved.txt"
-    echo "$out" | tail -2 >> "$RESULTS_DIR/bench-intermittent.log"
+# Attack loop: re-launch the bench whenever it exits, until the throttle
+# engages. Sustained pressure guarantees the 102.2 crossing is observed even
+# if one run finishes first.
+( while true; do
+    python3 test/bench.py --scenario intermittent \
+        --intermittent-rate "$INTERMITTENT_RATE" --workdir "$BENCH_WORKDIR" \
+        >>"$RESULTS_DIR/bench-intermittent.log" 2>&1
+    sleep 1
+done ) &
+attack_pid=$!
+
+# Wait for the throttle to engage (up to 180s, then fail closed).
+engaged=0; t_eng=0
+for i in $(seq 1 90); do
+    thr_now=$(metric dwell_fiber_v3_throttled_count); thr_now="${thr_now:-0}"
+    if [ "$thr_now" -gt "$thr_before_b" ]; then
+        engaged=1; t_eng=$(( $(date +%s) - t0 )); break
+    fi
+    sleep 2
 done
+if [ "$engaged" = 1 ]; then
+    printf 'throttle ENGAGED (time-to-throttle %ss)\n' "$t_eng"
+else
+    printf 'throttle did NOT engage within 180s -- gates below will FAIL\n'
+fi
+
+# Throttled-state evidence window (20s): the slice may only ever contain
+# throttled PIDs, so its kernel write rate must sit at/below the 1 MB/s cap;
+# count files written in the window as the effective attack rate under throttle.
+wrate="?"
+nfiles_win="?"
+if [ "$engaged" = 1 ]; then
+    wa=$(io_wbytes); wa="${wa:-0}"
+    sleep 20
+    wb=$(io_wbytes); wb="${wb:-0}"
+    wrate=$(python3 -c "print(f'{($wb - $wa) / 20 / 1e6:.2f}')" 2>/dev/null || echo "?")
+    nfiles_win=$(find "$BENCH_WORKDIR/intermittent_out" -name 'victim_*.dat' \
+        -newermt '-25 seconds' 2>/dev/null | wc -l)
+    printf 'throttled window: slice write rate=%s MB/s (cap 1.00), files written in 20s=%s\n' \
+        "$wrate" "$nfiles_win"
+    printf '%s\n' "$wrate" > "$RESULTS_DIR/throttled-wrate.txt"
+    printf '%s\n' "$nfiles_win" > "$RESULTS_DIR/throttled-files.txt"
+fi
+
+# Stop the attack: kill the relaunch loop, then any in-flight bench.
+kill "$attack_pid" 2>/dev/null || true
+pkill -f "bench.py --scenario intermittent" 2>/dev/null || true
+wait "$attack_pid" 2>/dev/null || true
+sleep 2
 kill "$watcher_pid" 2>/dev/null || true
 wait "$watcher_pid" 2>/dev/null || true
 stop_sampler "$sampler_pid"
-w1=$(io_wbytes); w1="${w1:-0}"; t1=$(date +%s)
 thr_after_b=$(metric dwell_fiber_v3_throttled_count); thr_after_b="${thr_after_b:-0}"
 kill_after_b=$(metric dwell_fiber_v3_killed_count); kill_after_b="${kill_after_b:-0}"
 peak_b=$(cat "$RESULTS_DIR/peak-intermittent.txt")
-dt=$((t1 - t0)); [ "$dt" -le 0 ] && dt=1
-# io.stat wbytes rate across the attack window (supporting evidence only)
-wrate=$(python3 -c "print(f'{($w1 - $w0) / $dt / 1e6:.2f}')" 2>/dev/null || echo "?")
-printf 'attack: peak_price=%s throttled %s -> %s | killed %s -> %s | slice wbytes rate=%s MB/s\n' \
-    "$peak_b" "$thr_before_b" "$thr_after_b" "$kill_before_b" "$kill_after_b" "$wrate"
+printf 'attack: peak_price=%s throttled %s -> %s | killed %s -> %s\n' \
+    "$peak_b" "$thr_before_b" "$thr_after_b" "$kill_before_b" "$kill_after_b"
 
 # ============ 7/7 assertions ============
 printf '\n=== 7/7 gate assertions ===\n'
@@ -277,9 +321,14 @@ gate "benign caused no throttling (+$thr_delta_a)" \
 
 printf '\n  supporting evidence (not gating):\n'
 printf '  - attack peak price: %s (throttle=%.1f kill=%.1f)\n' "$peak_b" "$THROTTLE_PRICE" "$KILL_PRICE"
-printf '  - slice write rate during attack window: %s MB/s (cap = 1.00 MB/s)\n' "$wrate"
-printf '  - achieved files/s per loop (target %s/s):\n' "$INTERMITTENT_RATE"
-sed 's/^/      loop /' "$RESULTS_DIR/achieved.txt"
+if [ "$engaged" = 1 ]; then
+    frate=$(python3 -c "print(f'{$nfiles_win/20:.1f}')" 2>/dev/null || echo "?")
+    printf '  - time-to-throttle: %ss\n' "$t_eng"
+    printf '  - throttled 20s window: slice write rate %s MB/s (cap 1.00), %s files written (~%s/s vs %s/s unthrottled)\n' \
+        "$wrate" "$nfiles_win" "$frate" "$INTERMITTENT_RATE"
+else
+    printf '  - throttle never engaged; no throttled-state evidence collected\n'
+fi
 
 printf '\n=== %s (%s/%s hard gates failed) ===\n' \
     "$([ "$fails" -eq 0 ] && echo 'THROTTLE TEST: PASS' || echo 'THROTTLE TEST: FAIL')" \
