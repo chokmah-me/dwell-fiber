@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-09-25 (V3 GATE A/B/C re-measured on WSL: PASS with P_b=0.0, P_i=681.37, throttle=102.2, kill=204.4; BPF verifier fix for the CO-RE kprobe pushed)
+**Last updated:** 2026-09-28 (V3 throttle-only 7/7 hard gates PASS on WSL: attack throttled to 100 files/s vs 350/s unthrottled, peak price 456.2, zero kills, benign tar clean; `/proc` fallback sensor unblocked BPF-blind WSL kernel)
 
 ## Working
 
@@ -28,11 +28,16 @@
   `dwell_fiber_v3_*` metrics; on the `intermittent` scenario `v3_wip`/`v3_price`
   rise while V2 `price` stays 0 — the blind spot is *detected*. Signals come from
   syscall tracepoints (TBW from `sys_enter_write`, now filtered in-kernel to
-  sub-page/lookup-only to bound overhead; UFM is an opens/s proxy).
+  sub-page/lookup-only to bound overhead; UFM is an opens/s proxy), **plus a
+  `/proc/<pid>/io` fallback** (`daemon/proc_io_monitor.go`) for WSL kernels where
+  BPF tracepoints don't fire for user processes.
   - **Enforcement** (`--v3-enforce`, dry-run by default; `--v3-enable-killing` is
     a separate gate, mirroring V2): high-pressure PIDs are io.max-throttled
     (`pkg/enforcement` `EnforceWIP` / `ThrottleIO`), then killed past
     `V3KillPrice`. Reuses V2's `SafetyChecker` whitelists. Without `--v3-enforce`
+  - **Live-validated 2026-09-28**: `test/wsl_throttle_test.sh` 7/7 hard gates PASS
+    on WSL (throttle-only, killing disarmed). Attack throttled to 100 files/s vs
+    350/s unthrottled; benign tar unaffected.
     the daemon logs the actions it *would* take.
   - **Price decay**: V3 ADMM price leaks each window (`ControllerV3.Leak`) so a
     transient benign burst bleeds off instead of latching into enforcement range;

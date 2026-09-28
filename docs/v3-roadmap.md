@@ -234,6 +234,13 @@ Integrated into the daemon, running in parallel with V2 (observation only):
 documented starting points. The regression gate is `bench.py`: benign/tar must
 stay below `V3ThrottlePrice` while intermittent clears it. Re-tune on the VM.
 
+**Live validation 2026-09-28**: `test/wsl_throttle_test.sh` achieves 7/7 hard
+gates PASS on WSL Ubuntu 24.04 (throttle-only, killing disarmed). Attack peak
+price 456.2 → throttled to 100 files/s (vs 350/s unthrottled) via `io.max`
+`wbps=1048576`; benign tar exit 0 with zero throttling. Required the
+`/proc/<pid>/io` fallback sensor because WSL BPF tracepoints don't fire for
+user processes. See `docs/wsl-throttle-debugging.md`.
+
 ### 🚧 Still deferred — see STATUS.md "Frozen"
 
 - ML-based tier classification; calibration against real ransomware samples.

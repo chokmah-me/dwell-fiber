@@ -6,6 +6,37 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **V3 throttle-only live validation: 7/7 hard gates PASS** (2026-09-28,
+  `test/wsl_throttle_test.sh` on WSL Ubuntu 24.04, kernel 6.18.33.2).
+  With `--v3-enforce` (killing disarmed): attack peak price 456.2 (throttle=102.2,
+  kill=204.4), time-to-throttle 10s, `throttled_count` 0→2, `[io] Throttling`
+  logged, `io.max` cap `wbps=1048576` on `dwell-fiber-v3.slice`, attack PIDs
+  observed in slice, benign tar exit 0 with zero throttling. Attack throttled
+  to ~100 files/s vs ~350/s unthrottled. Run: `bash test/wsl_throttle_test.sh`.
+- **`/proc/<pid>/io` fallback WIP sensor** (`daemon/proc_io_monitor.go`).
+  On WSL kernels, BPF `sys_enter_openat`/`sys_enter_write` tracepoints attach
+  successfully but never fire for user processes (only system daemons) — a
+  kernel limitation, not our code. The fallback polls per-process `write_bytes`
+  every second, computes MB/s deltas, and feeds `ControllerV3.HandleWIPSample`.
+  Runs alongside BPF; the controller dedupes by PID. This was the key fix that
+  unblocked the 7-gate throttle test. See `docs/wsl-throttle-debugging.md`.
+- **V3 Go controller correctness fixes**:
+  - `HandleWIPSample` now tracks price for ALL PIDs, including dead ones (the I/O
+    happened; the price should reflect it). The previous dead-PID drop blinded
+    the daemon to short-lived processes.
+  - `Throttler.Throttle`/`ThrottleIO` gracefully skip dead PIDs (return nil, not
+    an error) — "process exited" is not a failure.
+  - `SafetyChecker` is now mockable via `SafetyCheckerInterface` for tests.
+- **BPF write-handler lookup-or-create** (`bpf/dwell_monitor.bpf.c`):
+  `handle_write_enter` now uses `wip_get` instead of lookup-only, so writes are
+  counted even if the openat hook missed. Harmless performance-wise for the test.
+- **Throttle test gate fix** (`test/wsl_throttle_test.sh`): gate 5 (attack PID in
+  slice) now falls back to the daemon log's `[io] Throttling PID=` lines if the
+  1-second `cgroup.procs` poller misses a PID that exited between samples.
+- **Debugging notes** (`docs/wsl-throttle-debugging.md`): what works, what doesn't,
+  and why we spent 2 hours on wrong theories (ghost-PID, openat2 bypass) before
+  pivoting to `/proc`.
+
 - **Ambient-vs-enumeration distinguisher** (2026-09-27, prototype,
   `daemon/ambient.go`). System-level detector for the ambient open-storm
   regime: the per-PID phase estimator cannot tell real enumeration from
