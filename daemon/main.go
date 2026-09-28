@@ -139,6 +139,12 @@ func main() {
 					log.Printf("⚠️  Failed to start V3 WIP observation: %v", werr)
 				} else {
 					defer wipMonitor.Close()
+					// Fallback: /proc I/O polling for kernels where BPF tracepoints
+					// don't fire for user processes (e.g., WSL). Runs alongside BPF;
+					// the controller dedupes by PID.
+					procMon := NewProcIOMonitor(ctrlV3)
+					defer procMon.Stop()
+					log.Printf("✓ Started /proc I/O fallback monitor")
 					action := "NO enforcement"
 					if *v3Enforce {
 						action = "ENFORCING"
