@@ -15,6 +15,8 @@ func newACPPolicyTestController(alpha float64, withPolicy bool) *ControllerV3 {
 		Leak:          defaultLeak,
 		mu:            sync.RWMutex{},
 		processStates: make(map[int]*ProcessStateV3),
+		// Fake PIDs are "alive" with a stable starttime (no reuse).
+		startTimeFunc: func(pid int) (uint64, error) { return 1, nil },
 	}
 	if withPolicy {
 		c.acpPolicy = DefaultACPPolicy()

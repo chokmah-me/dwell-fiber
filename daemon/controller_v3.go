@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -93,6 +95,7 @@ type ProcessStateV3 struct {
 	UFM          float64 // files/s, last window
 	WIP          float64
 	Phase        AttackerPhase // ACP bridge: inferred attacker phase (PhaseUnknown when policy off)
+	StartTime    uint64        // /proc/<pid>/stat starttime (clock ticks); detects PID reuse
 	LastUpdate   time.Time
 }
 
@@ -107,6 +110,11 @@ type ControllerV3 struct {
 	enforcer *enforcement.Enforcer
 
 	processStates map[int]*ProcessStateV3
+
+	// startTimeFunc returns the process start time for PID-reuse detection.
+	// Defaults to procStartTime (reads /proc/<pid>/stat); tests override it
+	// to use fake PIDs without needing live processes.
+	startTimeFunc func(int) (uint64, error)
 
 	// Aggregate "worst offender" gauges so the dashboard/bench can scrape a
 	// single number; per-process detail stays in processStates.
@@ -138,6 +146,7 @@ func NewControllerV3(alpha float64) *ControllerV3 {
 		Alpha:         alpha,
 		Leak:          defaultLeak,
 		processStates: make(map[int]*ProcessStateV3),
+		startTimeFunc: procStartTime,
 		wipGauge: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "dwell_fiber_v3_wip",
 			Help: "V3 Weighted I/O Pressure of the highest-pressure process (observation only)",
@@ -268,11 +277,46 @@ func (c *ControllerV3) leak(price float64) float64 {
 	return p
 }
 
+// procStartTime returns the process start time (field 22 of /proc/<pid>/stat,
+// in clock ticks since boot). Used to detect PID reuse: if the starttime of a
+// PID differs from the stored one, the PID now belongs to a different process
+// and its controller state must be reset. Returns an error if the process
+// does not exist (or /proc is unreadable).
+func procStartTime(pid int) (uint64, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0, err
+	}
+	// comm may contain spaces or parentheses; starttime is the 20th field
+	// after the last ')' (field 22 overall: pid(1) comm(2) state(3) ...).
+	s := string(data)
+	i := strings.LastIndexByte(s, ')')
+	if i < 0 {
+		return 0, fmt.Errorf("malformed /proc/%d/stat", pid)
+	}
+	fields := strings.Fields(s[i+1:])
+	if len(fields) < 20 {
+		return 0, fmt.Errorf("too few fields in /proc/%d/stat", pid)
+	}
+	return strconv.ParseUint(fields[19], 10, 64)
+}
+
 // HandleWIPSample processes one per-PID, per-second rate sample. tbw is MB/s,
 // ufm is files/s. Observation only: updates state + metrics, never enforces.
 func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// If the PID is dead, drop its state and skip. The BPF sample reflects
+	// I/O from a process that has already exited; enforcing would chase a
+	// ghost, and retaining the price lets a reused PID inherit a stale
+	// baseline (observed 2026-09-28: the daemon tried to throttle dead PIDs
+	// while the live attack ran unimpeded).
+	startTime, err := c.startTimeFunc(pid)
+	if err != nil {
+		delete(c.processStates, pid)
+		return
+	}
 
 	st, ok := c.processStates[pid]
 	if !ok {
@@ -281,6 +325,19 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 			Cmd:          cmd,
 			CurrentTier:  c.ClassifyTier(cmd),
 			CurrentPrice: 0,
+			StartTime:    startTime,
+			LastUpdate:   time.Now(),
+		}
+		c.processStates[pid] = st
+	} else if st.StartTime != startTime {
+		// PID reuse: this PID now belongs to a different process. Reset
+		// state so the new process doesn't inherit the old one's price.
+		st = &ProcessStateV3{
+			PID:          pid,
+			Cmd:          cmd,
+			CurrentTier:  c.ClassifyTier(cmd),
+			CurrentPrice: 0,
+			StartTime:    startTime,
 			LastUpdate:   time.Now(),
 		}
 		c.processStates[pid] = st

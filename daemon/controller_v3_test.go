@@ -140,6 +140,7 @@ func TestEnforceWIP_DryRunTakesNoAction(t *testing.T) {
 
 func TestHandleWIPSample_RecordsState(t *testing.T) {
 	c := NewControllerV3(0.5) // full constructor: exercises metric publishing
+	c.startTimeFunc = func(pid int) (uint64, error) { return 1, nil } // fake PIDs are "alive"
 	c.HandleWIPSample(4242, "python3", 500, 500)
 
 	wip, price, tier, ok := c.GetState(4242)
