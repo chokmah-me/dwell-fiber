@@ -398,12 +398,14 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 		// the price. If the process exited and the PID was reused, the start
 		// time will differ (or the lookup will fail). Killing the wrong process
 		// is worse than missing a kill.
-		if st.StartTime != 0 {
-			currentStartTime, err := c.startTimeFunc(pid)
-			if err != nil || currentStartTime != st.StartTime {
-				// PID exited or was reused; skip enforcement.
-				return
-			}
+		//
+		// If st.StartTime is 0, the PID was already dead at sample time and we
+		// cannot verify identity. Fail closed: skip enforcement. This is the
+		// common case for short-lived processes where PID reuse is most likely.
+		currentStartTime, err := c.startTimeFunc(pid)
+		if err != nil || st.StartTime == 0 || currentStartTime != st.StartTime {
+			// PID exited, was reused, or was never verifiable; skip enforcement.
+			return
 		}
 		if err := c.enforcer.EnforceWIP(pid, cmd, st.CurrentPrice); err != nil {
 			fmt.Printf("⚠️  [V3] enforce failed: %v\n", err)
