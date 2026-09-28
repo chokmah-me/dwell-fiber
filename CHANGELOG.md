@@ -6,6 +6,21 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **Ambient-vs-enumeration distinguisher** (2026-09-27, prototype,
+  `daemon/ambient.go`). System-level detector for the ambient open-storm
+  regime: the per-PID phase estimator cannot tell real enumeration from
+  ambient bursts (each ~30 s burst arrives on a fresh short-lived PID that
+  never progresses past recon), so this watches *across* PIDs for the
+  conjunction of metronomic burst cadence (inter-arrival CV ≤ 0.25, median
+  period 10–120 s) and PID churn (distinct-PID/burst ratio ≥ 0.75 over
+  5 min). **Observe-only — pricing is untouched** (proven by a test that
+  drives identical samples with the detector on/off and asserts
+  bit-identical prices). Exports `dwell_fiber_v3_ambient_storm` (gauge) and
+  `dwell_fiber_v3_ambient_bursts_total` (counter); works with fixed pricing
+  too (signature-fed, not phase-fed). 8 unit tests
+  (`daemon/ambient_test.go`); design, signal table, and adversarial analysis
+  in `docs/ambient-distinguisher.md`.
+
 - **ACP cognitive-phase price policy for V3** (2026-09-25, opt-in
   `--acp-policy`, requires `--use-v3-wip`). Ports the `OptimisticACPDefender`
   decision logic from the `acp-simulation` project into the V3 controller

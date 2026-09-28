@@ -124,6 +124,13 @@ type ControllerV3 struct {
 	// ADMM modulation. Nil when disabled -- fixed alpha/budget, today's behavior.
 	acpPolicy   *ACPPolicy
 	acpEstimator *ACPPhaseEstimator
+
+	// Ambient distinguisher (always on within V3 observation): system-level
+	// recon-burst regime detector. Observe-only -- never changes pricing.
+	// See daemon/ambient.go and docs/ambient-distinguisher.md.
+	ambient             *AmbientDetector
+	ambientStormGauge   prometheus.Gauge
+	ambientBurstsCounter prometheus.Counter
 }
 
 func NewControllerV3(alpha float64) *ControllerV3 {
@@ -167,6 +174,15 @@ func NewControllerV3(alpha float64) *ControllerV3 {
 			Name: "dwell_fiber_v3_acp_phase",
 			Help: "ACP bridge: attacker phase of the highest-priced process (0=unknown,1=recon,2=learning,3=exploitation); -1 when the ACP policy is disabled",
 		}),
+		ambient: NewAmbientDetector(),
+		ambientStormGauge: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dwell_fiber_v3_ambient_storm",
+			Help: "Ambient distinguisher: 1 while a metronomic fresh-PID recon-burst regime (ambient open storms) is active, 0 otherwise; observe-only",
+		}),
+		ambientBurstsCounter: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "dwell_fiber_v3_ambient_bursts_total",
+			Help: "Ambient distinguisher: recon-signature bursts observed while the ambient-storm regime was active; observe-only",
+		}),
 	}
 
 	prometheus.MustRegister(c.wipGauge)
@@ -179,6 +195,8 @@ func NewControllerV3(alpha float64) *ControllerV3 {
 	prometheus.MustRegister(c.killedGauge)
 	prometheus.MustRegister(c.acpPhaseGauge)
 	c.acpPhaseGauge.Set(-1)
+	prometheus.MustRegister(c.ambientStormGauge)
+	prometheus.MustRegister(c.ambientBurstsCounter)
 
 	return c
 }
@@ -277,6 +295,25 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 	st.TBW = tbw
 	st.UFM = ufm
 	st.WIP = c.CalculateWIP(st.CurrentTier, tbw, ufm)
+	// Ambient distinguisher: feed recon-signature bursts to the system-level
+	// detector. Signature-based (not phase-based) so it works with fixed
+	// pricing too. Observe-only: never changes the price update below.
+	if c.ambient != nil {
+		c.ambient.Poll(time.Now())
+		if ufm >= reconOpensPerSec && tbw < reconTBWCap {
+			c.ambient.ObserveBurst(pid, time.Now())
+			if c.ambient.StormActive() && c.ambientBurstsCounter != nil {
+				c.ambientBurstsCounter.Inc()
+			}
+		}
+		if c.ambientStormGauge != nil {
+			if c.ambient.StormActive() {
+				c.ambientStormGauge.Set(1)
+			} else {
+				c.ambientStormGauge.Set(0)
+			}
+		}
+	}
 	// ACP bridge: modulate the ADMM update by inferred attacker phase.
 	alpha, budget := c.Alpha, tierConfigs[st.CurrentTier].Budget
 	if c.acpPolicy != nil {
