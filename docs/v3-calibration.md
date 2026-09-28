@@ -249,6 +249,25 @@ feasible pass; passes 1–2 were infeasible).
 Calibrated band (M = 0.15, R = 2.0): `V3ThrottlePrice = 102.2`,
 `V3KillPrice = 204.4` → GATE C **PASSES** by construction.
 
+### Confirmation runs 2026-09-28 (paced bench)
+
+The unpaced bench's rate proved host-speed-dependent (P_i=681 on 09-25 vs
+P_i=0.0 on 09-28 for the same script), so the bench is now paced
+(`--intermittent-rate`, default 350/s; achieved rate reported). Two paced
+runs with `--acp-policy`:
+
+| Run | Achieved rate | P_b | P_i | Ambient (60s idle) |
+|---|---|---|---|---|
+| 03:54 | 307/s | 0.0 | **387.7** | — (log-grep artifact, discarded) |
+| 04:06 | 333/s | 0.0 | **371.5** | **0.0** |
+
+Both P_i clear the 204.4 kill threshold by ~1.8× and reproduce within 4%.
+The old `ambient_ceiling_log` (max over the whole daemon log) measured the
+bench itself, not ambient — replaced by a 60s idle poller window
+(`ambient_ceiling_idle`). Thresholds locked into daemon defaults 2026-09-28
+(`pkg/enforcement/config.go`, pinned by `TestCalibratedV3Thresholds`); the
+prior placeholders (50/150) sat *below* the worst ambient seen on 09-25.
+
 ### What changed since pass 2 (attribution — single arm, no control)
 
 Four variables moved at once, so the ACP policy's marginal contribution is

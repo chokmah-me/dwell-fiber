@@ -35,13 +35,18 @@ func DefaultConfig() *Config {
 		ThrottleCPUQuota:  15,               // Changed from 20%
 		KillThreshold:     10 * time.Second, // Changed from 15s
 		KillEnabled:       false,            // Very conservative default
-		// STARTING POINTS, pending VM calibration (bench.py benign vs intermittent
-		// is the gate -- see docs/v3-roadmap.md). The observed intermittent run
-		// reached price ~145 without decay; with decay the attack's steady-state
-		// price is lower, so these sit below that to still trigger. Re-tune so
-		// benign/tar stays under V3ThrottlePrice and intermittent clears it.
-		V3ThrottlePrice: 50,      // throttle once sustained WIP pushes price up
-		V3KillPrice:     150,     // kill only well past the throttle band
+		// Calibrated 2026-09-25 (pass-3, WSL BPF host), confirmed 2026-09-28.
+		// Formula (test/calibrate_v3.py, M=0.15, R=2.0):
+		//   throttle = P_b + M*(P_i - P_b) = 0 + 0.15*681.37 = 102.2
+		//   kill = throttle * R = 204.4
+		// Confirmation runs (paced bench, 307-333 files/s): P_b=0.0,
+		// ambient idle 0.0, P_i=371.5 and 387.7 -- both clear kill by ~1.8x;
+		// benign/ambient stay under throttle (worst ambient seen: ~96 on
+		// 09-25, source unidentified -- the storm detector labels it if it
+		// returns). Do NOT change these without re-running
+		// test/wsl_acp_validate.sh: TestCalibratedV3Thresholds pins them.
+		V3ThrottlePrice: 102.2,   // throttle once sustained WIP pushes price up
+		V3KillPrice:     204.4,   // kill only well past the throttle band
 		V3ThrottleWBPS:  1048576, // 1 MB/s write cap (not 0 -- avoid hard hangs)
 		ProtectedPIDs:     []int{1},         // init/systemd
 		ProtectedCmds: []string{

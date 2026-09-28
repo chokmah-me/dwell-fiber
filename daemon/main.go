@@ -25,6 +25,8 @@ func main() {
 	useV3WIP := flag.Bool("use-v3-wip", false, "Run the V3 rate-based WIP detector in parallel (observation only by default)")
 	v3Enforce := flag.Bool("v3-enforce", false, "Enable V3 (WIP) enforcement: io.max throttle high-pressure PIDs (requires --use-v3-wip)")
 	v3EnableKilling := flag.Bool("v3-enable-killing", false, "Enable V3 process killing (requires --v3-enforce; very dangerous!)")
+	v3ThrottlePrice := flag.Float64("v3-throttle-price", 102.2, "V3 ADMM price that triggers io.max throttle (calibrated 2026-09-28; see pkg/enforcement/config.go)")
+	v3KillPrice := flag.Float64("v3-kill-price", 204.4, "V3 ADMM price that triggers kill (calibrated 2026-09-28; requires --v3-enforce --v3-enable-killing)")
 	acpPolicy := flag.Bool("acp-policy", false, "Enable the ACP cognitive-phase price policy on V3: dampen ADMM during recon/learning, escalate during exploitation (requires --use-v3-wip)")
 	flag.Parse()
 
@@ -116,6 +118,8 @@ func main() {
 					v3cfg := enforcement.DefaultConfig()
 					v3cfg.Enabled = *v3Enforce
 					v3cfg.KillEnabled = killing
+					v3cfg.V3ThrottlePrice = *v3ThrottlePrice
+					v3cfg.V3KillPrice = *v3KillPrice
 					ctrlV3.SetEnforcer(enforcement.NewEnforcer(v3cfg))
 					mode := "DRY-RUN (would-enforce logging)"
 					if *v3Enforce {
@@ -126,7 +130,8 @@ func main() {
 					} else if *v3EnableKilling {
 						fmt.Println("⚠️  --v3-enable-killing ignored without --v3-enforce")
 					}
-					fmt.Printf("⚠️  V3 enforcement: %s\n", mode)
+					fmt.Printf("⚠️  V3 enforcement: %s (throttle price ≥ %.1f, kill price ≥ %.1f)\n",
+						mode, v3cfg.V3ThrottlePrice, v3cfg.V3KillPrice)
 				}
 
 				wipMonitor, werr := NewWIPMonitor(bpfLoader, ctrlV3)
