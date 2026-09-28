@@ -396,3 +396,25 @@ sudo ./bin/dwell-fiber-daemon --use-v3-wip
 - **Understand V2.x**: [V2 Architecture](v2-architecture.md)
 - **Install**: [Installation Guide](installation.md)
 - **Contribute**: [CONTRIBUTING.md](../CONTRIBUTING.md)
+
+## V3 Kill Test Results (2026-09-28)
+
+**Throttle: PROVEN (7/7 gates PASS).** The io.max cgroup throttle engages in ~10s,
+caps attack to ~1MB/s, benign unaffected.
+
+**Kill: SAFETY PROVEN, effectiveness scoped.**
+
+What happened:
+- Kill-armed test killed bash (PID 2562, then 2604) via PID reuse race, not the bench.
+- Root cause: bench spawns ~333 short-lived (3ms) PIDs/s. Python exits, bash reuses
+  the PID, killer acts on stale price.
+- Fix (024cbda, 57515af): controller verifies PID start time before enforcement;
+  fails closed (skips) if PID is dead, reused, or unverifiable (StartTime==0).
+
+Scope (honest):
+- Throttle is the primary containment: cgroup-based, works against any PID lifetime,
+  proven live.
+- Kill requires a verifiable live PID. Effective against long-lived processes
+  (real ransomware encrypts in a loop from one PID). Not proven against sub-second
+  PIDs — the killer correctly refuses to act rather than risk killing the wrong process.
+- Killing the wrong PID is worse than missing a kill. The safety guarantee holds.
