@@ -56,9 +56,16 @@ func (s *SafetyChecker) IsAlive(pid int) bool {
 	return isAlive(pid)
 }
 
-// isAlive uses signal 0 to probe for process existence.
-// Returns true for nil (OK) or EPERM (exists but no permission), false for ESRCH (no such process).
+// isAlive probes for process existence. Primary signal is /proc/<pid>
+// existence, which is robust against LSM/seccomp filters that can make
+// kill(pid, 0) fail for live processes (observed on WSL 2026-09-28: the
+// daemon's kill() returned non-EPERM for PIDs that were demonstrably alive
+// and reporting I/O in the same tick). Falls back to kill(pid, 0) for
+// environments where /proc is restricted (hidepid).
 func isAlive(pid int) bool {
+	if _, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); err == nil {
+		return true
+	}
 	err := syscall.Kill(pid, 0)
 	if err == nil {
 		return true
