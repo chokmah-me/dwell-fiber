@@ -11,10 +11,11 @@
 # Usage:
 #   cd ~/dwell-fiber && bash test/v3_measure.sh
 #
-# On ambient: the guest has ~30s cadence (unknown) bursts (UFM 200-679/s,
-# TBW 0).  Price never reaches literal 0.  This script accepts the floor
-# (50.0) as sufficiently drained, and the calibration step uses
-# P_b_eff = max(P_b, ambient_ceiling) to account for it.
+# On ambient: the guest showed ~30s cadence (unknown) bursts (UFM 200-679/s,
+# TBW 0) on 2026-09-25; none have been seen since ~03:11 on 2026-09-28.
+# Ambient is now measured honestly: a 60s idle poller window before the
+# benches, whose peak is the ambient ceiling. The calibration step uses
+# P_b_eff = max(P_b, ambient_ceiling_idle) to account for it.
 
 set -u
 export LC_ALL=C
@@ -53,15 +54,6 @@ price_lt() {
         "$1" "$2" 2>/dev/null
 }
 
-ambient_ceiling_from_log() {
-    set +e
-    grep -oa 'price=[0-9.]*' "${DAEMON_LOG:-/tmp/daemon-v3b.log}" 2>/dev/null \
-        | cut -d= -f2 \
-        | sort -n \
-        | tail -1
-    set -e
-}
-
 # ---- drain ----
 
 drain_floor() {
@@ -97,6 +89,50 @@ drain_floor() {
 
 # ---- measurement ----
 
+# ---- peak extraction (shared) ----
+# calibrate_v3.py --from-metrics prints a banner line before the JSON body;
+# parse from the first '{' so the banner cannot break the read.
+extract_peak() {
+    local poller_json="$1" peak_file="$2"
+    local peak
+    set +e
+    peak=$(python3 -c \
+        "import json,sys; t=open(sys.argv[1]).read(); print(json.loads(t[t.find('{'):])['peak_price'])" \
+        "$poller_json" 2>/dev/null)
+    set -e
+    if [ -z "$peak" ]; then
+        peak=0
+        printf '  WARN: could not parse poller JSON (%s); tail of file:\n' \
+            "$poller_json" >&2
+        tail -3 "$poller_json" >&2
+    fi
+    printf '%s\n' "$peak" > "$peak_file"
+    printf '  peak_price=%s\n' "$peak"
+}
+
+# ---- idle ambient window (no bench) ----
+# The true ambient ceiling: peak V3 price while the machine is otherwise
+# idle. The old approach (max price= over the whole daemon log) measured the
+# bench itself, not ambient.
+measure_idle() {
+    local duration="$1"
+    local poller_json="$RESULTS_DIR/poller-ambient.json"
+    local peak_file="$RESULTS_DIR/peak-ambient.txt"
+
+    printf '=== measure ambient (idle poller %ss, no bench) ===\n' "$duration"
+    cd "$REPO_ROOT"
+
+    printf '  starting poller …\n'
+    python3 test/calibrate_v3.py --from-metrics --duration-s "$duration" \
+        > "$poller_json" 2>&1 &
+    local poller_pid=$!
+
+    printf '  waiting for poller (pid %s) …\n' "$poller_pid"
+    wait "$poller_pid" || true
+
+    extract_peak "$poller_json" "$peak_file"
+}
+
 measure_window() {
     local scenario="$1" duration="$2"
     local poller_json="$RESULTS_DIR/poller-${scenario}.json"
@@ -127,23 +163,7 @@ measure_window() {
         "$bench_rc" "$poller_pid"
     wait "$poller_pid" || true
 
-    # ---- extract peak ----
-    # calibrate_v3.py --from-metrics prints a banner line before the JSON body;
-    # parse from the first '{' so the banner cannot break the read.
-    local peak
-    set +e
-    peak=$(python3 -c \
-        "import json,sys; t=open(sys.argv[1]).read(); print(json.loads(t[t.find('{'):])['peak_price'])" \
-        "$poller_json" 2>/dev/null)
-    set -e
-    if [ -z "$peak" ]; then
-        peak=0
-        printf '  WARN: could not parse poller JSON (%s); tail of file:\n' \
-            "$poller_json" >&2
-        tail -3 "$poller_json" >&2
-    fi
-    printf '%s\n' "$peak" > "$peak_file"
-    printf '  peak_price=%s\n' "$peak"
+    extract_peak "$poller_json" "$peak_file"
 }
 
 # ---- pre-flight ----
@@ -165,6 +185,13 @@ check_daemon
 
 P_B=""
 P_I=""
+AMBIENT=""
+
+# 0 — ambient idle window (true ambient ceiling; nothing running)
+AMBIENT_DURATION="${AMBIENT_DURATION:-60}"
+measure_idle "$AMBIENT_DURATION"
+AMBIENT=$(cat "$RESULTS_DIR/peak-ambient.txt")
+printf 'ambient ceiling (idle %ss peak) = %s\n' "$AMBIENT_DURATION" "$AMBIENT"
 
 # 1 — benign window
 drain_floor benign
@@ -178,13 +205,9 @@ measure_window intermittent "$POLLER_INTERMITTENT_DURATION"
 P_I=$(cat "$RESULTS_DIR/peak-intermittent.txt")
 printf 'P_i (intermittent window peak) = %s\n' "$P_I"
 
-# 3 — ambient ceiling from daemon log
-AMBIENT=$(ambient_ceiling_from_log)
-AMBIENT="${AMBIENT:-0}"
-printf 'ambient_ceiling (from daemon log) = %s\n' "$AMBIENT"
-
-# 4 — write results
-printf '{\n  "P_b": %s,\n  "P_i": %s,\n  "ambient_ceiling_log": %s,\n  "date": "%s",\n  "comment": "Ambient ~30s bursts (unknown PIDs, UFM 200-679/s, TBW 0) prevent drain to literal 0. P_b_eff = max(P_b, ambient_ceiling_log)."\n}\n' \
+# 3 — write results (ambient ceiling comes from the idle window above,
+# not from the daemon log: the old log-grep measured the bench itself)
+printf '{\n  "P_b": %s,\n  "P_i": %s,\n  "ambient_ceiling_idle": %s,\n  "date": "%s",\n  "comment": "ambient_ceiling_idle = peak V3 price during a 60s idle window (no bench). P_b_eff = max(P_b, ambient_ceiling_idle). Paced intermittent bench (--intermittent-rate, default 350/s); achieved rate printed by bench.py."\n}\n' \
     "$P_B" "$P_I" "$AMBIENT" "$(date -Iseconds)" \
     > "$RESULTS_DIR/results.json"
 
