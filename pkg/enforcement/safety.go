@@ -65,6 +65,8 @@ func (s *SafetyChecker) IsAlive(pid int) bool {
 func isAlive(pid int) bool {
 	if _, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); err == nil {
 		return true
+	} else {
+		fmt.Printf("🔍 [debug] isAlive(%d): os.Stat failed: %v\n", pid, err)
 	}
 	err := syscall.Kill(pid, 0)
 	if err == nil {
@@ -74,6 +76,7 @@ func isAlive(pid int) bool {
 	if err == syscall.EPERM {
 		return true
 	}
+	fmt.Printf("🔍 [debug] isAlive(%d): kill failed: %v\n", pid, err)
 	// ESRCH (or other) => not alive
 	return false
 }
