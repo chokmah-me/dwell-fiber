@@ -85,6 +85,18 @@ func (bm *BPFManager) AttachTracepoints() error {
 	bm.Links = append(bm.Links, tpOpenExit)
 	log.Println("✓ Attached to sys_exit_openat")
 
+	// Modern glibc prefers openat2(); without this the V3 WIP tracker is
+	// blind to Python and other modern userspace. Best-effort: older kernels
+	// lack the tracepoint.
+	if progOpen2 := bm.Collection.Programs["handle_openat2_enter"]; progOpen2 != nil {
+		if tpOpen2, err := link.Tracepoint("syscalls", "sys_enter_openat2", progOpen2, nil); err != nil {
+			log.Printf("⚠️  openat2 tracepoint unavailable (%v); V3 may miss modern userspace", err)
+		} else {
+			bm.Links = append(bm.Links, tpOpen2)
+			log.Println("✓ Attached to sys_enter_openat2")
+		}
+	}
+
 	// Attach to sys_enter_close
 	progClose := bm.Collection.Programs["handle_close_enter"]
 	if progClose == nil {

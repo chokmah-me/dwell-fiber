@@ -314,7 +314,6 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 	// while the live attack ran unimpeded).
 	startTime, err := c.startTimeFunc(pid)
 	if err != nil {
-		fmt.Printf("🔍 [debug] HandleWIPSample(%d): startTimeFunc failed: %v (dropping)\n", pid, err)
 		delete(c.processStates, pid)
 		return
 	}

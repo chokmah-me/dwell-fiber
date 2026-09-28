@@ -254,6 +254,33 @@ int handle_openat_enter(struct trace_event_raw_sys_enter *ctx) {
 	return 0;
 }
 
+/* Modern glibc (2.34+) prefers openat2() over openat() when available, so
+ * Python's open() on Ubuntu 24.04 bypasses the openat hook entirely. Without
+ * this, the V3 WIP tracker never sees the bench (or any modern userspace).
+ * Mirrors handle_openat_enter. */
+SEC("tracepoint/syscalls/sys_enter_openat2")
+int handle_openat2_enter(struct trace_event_raw_sys_enter *ctx) {
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u64 now = bpf_ktime_get_ns();
+
+	(void)ctx;
+
+	bpf_map_update_elem(&pid_activity, &pid, &now, BPF_ANY);
+
+	struct wip_state *wst = wip_get(pid, now);
+	if (wst) {
+		wst->ufm_accum++;
+	}
+
+	struct pending_open_value pending = {
+		.open_time = now,
+		.tgid = (__u32)(pid_tgid & 0xFFFFFFFF),
+	};
+	bpf_map_update_elem(&pending_opens, &pid_tgid, &pending, BPF_ANY);
+	return 0;
+}
+
 SEC("tracepoint/syscalls/sys_exit_openat")
 int handle_openat_exit(struct trace_event_raw_sys_exit *ctx) {
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
