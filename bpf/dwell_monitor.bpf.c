@@ -399,16 +399,16 @@ int handle_write_enter(struct trace_event_raw_sys_enter *ctx) {
 	 * filters keep enforcement-mode overhead bounded:
 	 *   1. Skip sub-page writes -- ransomware/bulk I/O writes in >=page chunks;
 	 *      tiny logging/control writes are noise for a TBW rate signal.
-	 *   2. Lookup only (no create): a PID accrues TBW only once it has a window,
-	 *      and windows are created exclusively by the openat hook. A process that
-	 *      never opens a regular file (pure socket/pipe writer) never allocates
-	 *      one, so the hot path is a single failed map lookup. */
+	 *   2. Lookup-or-create: if the openat hook missed (e.g., tracepoint didn't
+	 *      fire for this PID), create the window here so the write is still
+	 *      counted. A process that writes >=4KB is doing I/O worth tracking. */
 	if (count < 4096) {
 		return 0;
 	}
 
 	__u32 key = pid;
-	struct wip_state *wst = bpf_map_lookup_elem(&wip_tracker, &key);
+	__u64 now = bpf_ktime_get_ns();
+	struct wip_state *wst = wip_get(key, now);
 	if (wst) {
 		wst->tbw_accum += count;
 	}
