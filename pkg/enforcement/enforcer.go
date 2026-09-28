@@ -40,24 +40,46 @@ func NewEnforcerWithChecker(config *Config, checker SafetyCheckerInterface) *Enf
 	}
 }
 
-// Enforce applies appropriate enforcement action
+// Enforce applies appropriate enforcement action.
+// Ordering: when killing is disarmed the kill band is log-only and must NOT
+// shadow the throttle. A dwell that jumps straight past both thresholds would
+// otherwise escape containment entirely -- the kill branch returns early and
+// the throttle never fires. So in throttle-only mode the throttle band is
+// evaluated first and the kill band still logs its dry-run intent afterwards.
+// When killing is armed the kill band keeps precedence: a dead PID needs no
+// throttle.
 func (e *Enforcer) Enforce(pid int, cmd string, dwell time.Duration) error {
-	// Try kill first (if threshold exceeded)
-	if dwell >= e.config.KillThreshold {
-		if err := e.killer.Kill(pid, cmd, dwell); err != nil {
-			fmt.Printf("⚠️  Kill failed: %v\n", err)
-		}
-		return nil
-	}
-
-	// Try throttle (if threshold exceeded)
-	if dwell >= e.config.ThrottleThreshold {
+	throttle := func() {
 		if err := e.throttler.Throttle(pid, cmd, dwell); err != nil {
 			fmt.Printf("⚠️  Throttle failed: %v\n", err)
 		}
-		return nil
+	}
+	kill := func() {
+		if err := e.killer.Kill(pid, cmd, dwell); err != nil {
+			fmt.Printf("⚠️  Kill failed: %v\n", err)
+		}
 	}
 
+	if e.config.KillEnabled {
+		// Armed: kill takes precedence; a dead PID needs no throttle.
+		if dwell >= e.config.KillThreshold {
+			kill()
+			return nil
+		}
+		if dwell >= e.config.ThrottleThreshold {
+			throttle()
+			return nil
+		}
+		return nil
+	}
+	// Disarmed (throttle-only): the kill band is log-only, so contain first
+	// and record kill intent second.
+	if dwell >= e.config.ThrottleThreshold {
+		throttle()
+	}
+	if dwell >= e.config.KillThreshold {
+		kill() // logs "[DRY-RUN] Would kill" when disarmed
+	}
 	return nil
 }
 

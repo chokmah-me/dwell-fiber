@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // mockChecker always allows enforcement (for testing band logic without
@@ -115,5 +116,26 @@ func TestEnforceWIPBelowThrottleBand(t *testing.T) {
 	})
 	if strings.Contains(out, "Throttling") || strings.Contains(out, "kill") {
 		t.Errorf("enforcement fired below throttle band.\noutput:\n%s", out)
+	}
+}
+
+// TestEnforceV2ThrottleNotShadowedByKillBand is the V2 analogue of the V3
+// regression test: with killing disarmed, a dwell that exceeds BOTH thresholds
+// must still be throttled. Before the fix the kill band was checked first and
+// returned early; with killing disarmed the kill branch is log-only, so the
+// process escaped containment entirely.
+func TestEnforceV2ThrottleNotShadowedByKillBand(t *testing.T) {
+	e := NewEnforcerWithChecker(throttleOnlyConfig(), &mockChecker{})
+	out := captureOutput(func() {
+		// 15s exceeds both ThrottleThreshold (3s) and KillThreshold (10s).
+		if err := e.Enforce(NoSuchPID, "bench", 15*time.Second); err != nil {
+			t.Fatalf("Enforce: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Throttling") {
+		t.Errorf("throttle branch did not run for dwell above kill threshold (disarmed).\noutput:\n%s", out)
+	}
+	if !strings.Contains(out, "[DRY-RUN] Would kill") {
+		t.Errorf("dry-run kill intent not logged for dwell above kill threshold.\noutput:\n%s", out)
 	}
 }
