@@ -308,6 +308,16 @@ if [ -s "$RESULTS_DIR/slice_pids.txt" ]; then
     procs_seen=1
     pids_in_slice=$(sort -u "$RESULTS_DIR/slice_pids.txt" | tr '\n' ' ')
 fi
+# Fallback: the throttler logs "[io] Throttling PID=<pid>" at the moment it
+# moves the PID into the slice. If polling missed it (PID exited between
+# 1s samples), the log proves the PID was throttled.
+if [ "$procs_seen" -eq 0 ]; then
+    logged_pids=$(grep -o '\[io\] Throttling PID=[0-9]*' "$DAEMON_LOG" 2>/dev/null | grep -o '[0-9]*' | sort -u | tr '\n' ' ')
+    if [ -n "$logged_pids" ]; then
+        procs_seen=1
+        pids_in_slice="$logged_pids (from daemon log)"
+    fi
+fi
 gate "attack PID observed in slice cgroup.procs during run" "$procs_seen" \
     "pids seen in slice: ${pids_in_slice:-none}"
 
