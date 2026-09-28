@@ -394,6 +394,17 @@ func (c *ControllerV3) HandleWIPSample(pid int, cmd string, tbw, ufm float64) {
 	}
 
 	if c.enforcer != nil {
+		// PID-reuse guard: verify the PID is still the same process that earned
+		// the price. If the process exited and the PID was reused, the start
+		// time will differ (or the lookup will fail). Killing the wrong process
+		// is worse than missing a kill.
+		if st.StartTime != 0 {
+			currentStartTime, err := c.startTimeFunc(pid)
+			if err != nil || currentStartTime != st.StartTime {
+				// PID exited or was reused; skip enforcement.
+				return
+			}
+		}
 		if err := c.enforcer.EnforceWIP(pid, cmd, st.CurrentPrice); err != nil {
 			fmt.Printf("⚠️  [V3] enforce failed: %v\n", err)
 		}
