@@ -26,6 +26,10 @@ FLOOR_THRESHOLD="${FLOOR_THRESHOLD:-50.0}"
 FLOOR_TIMEOUT_S="${FLOOR_TIMEOUT_S:-120}"
 POLLER_BENIGN_DURATION=180
 POLLER_INTERMITTENT_DURATION=300
+# Paced files/s for the intermittent bench (0 = unpaced legacy). 350
+# replicates the 2026-09-25 calibration conditions; the unpaced bench's rate
+# is host-speed-dependent (P_i=681 on 09-25 vs P_i=0.0 on 09-28, same script).
+INTERMITTENT_RATE="${INTERMITTENT_RATE:-350}"
 REPO_ROOT="${REPO_ROOT:-$HOME/dwell-fiber}"
 
 mkdir -p "$RESULTS_DIR"
@@ -113,6 +117,7 @@ measure_window() {
     printf '  running bench …\n'
     set +e
     python3 test/bench.py --scenario "$scenario" \
+        --intermittent-rate "$INTERMITTENT_RATE" \
         --out "$RESULTS_DIR/bench-${scenario}3.md"
     local bench_rc=$?
     set -e

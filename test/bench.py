@@ -134,32 +134,64 @@ def run_attack(workdir: Path, n_files: int = 100, hold_s: float = 8.0) -> dict:
 
 
 def run_intermittent(workdir: Path, n_files: int = 2000,
-                     chunk_bytes: int = 1_048_576) -> dict:
+                     chunk_bytes: int = 1_048_576,
+                     files_per_sec: float = 350.0) -> dict:
     """Open N files, write a 1MB chunk, close immediately. Repeat.
     This is the LockBit 3.0+ fast-intermittent-encryption pattern: each file
     session is <100ms dwell, well below the 5s budget, so V2.x dwell tracking
-    never raises the price. The blind spot, made measurable."""
+    never raises the price. The blind spot, made measurable.
+
+    Pacing: the original version ran "as fast as possible", so the measured
+    P_i was a property of host speed, not of the workload -- the same script
+    measured P_i=681 on 2026-09-25 (~340 files/s) and P_i=0.0 on 2026-09-28
+    (~33 files/s). files_per_sec paces the run with per-second windows so
+    calibration is reproducible; 0 = unpaced (legacy). The 1MB chunk is
+    generated once: content is irrelevant to the measurement and per-file
+    urandom was pure CPU noise in the rate.
+    """
     target = workdir / "intermittent_out"
     target.mkdir(exist_ok=True)
 
     before = scrape()
     print(f"[intermittent] before: {before}")
     print(f"[intermittent] writing {n_files} files, {chunk_bytes} bytes each, "
-          "open->write->close (no hold)...")
+          f"open->write->close (no hold), paced at {files_per_sec}/s...")
+    chunk = os.urandom(chunk_bytes)
     t0 = time.time()
-    for i in range(n_files):
-        path = target / f"victim_{i:05d}.dat"
-        with open(path, "wb") as f:
-            f.write(os.urandom(chunk_bytes))
-            f.flush()
-        # No sleep: short dwell is the whole point.
-        if i % 200 == 0:
-            print(f"  ... {i}/{n_files}")
+    if files_per_sec > 0:
+        done = 0
+        while done < n_files:
+            w0 = time.time()
+            target_n = min(n_files, done + int(files_per_sec))
+            while done < target_n:
+                path = target / f"victim_{done:05d}.dat"
+                with open(path, "wb") as f:
+                    f.write(chunk)
+                    f.flush()
+                done += 1
+                if done % 200 == 0:
+                    print(f"  ... {done}/{n_files}")
+            dt = time.time() - w0
+            if dt < 1.0:
+                time.sleep(1.0 - dt)
+    else:
+        for i in range(n_files):
+            path = target / f"victim_{i:05d}.dat"
+            with open(path, "wb") as f:
+                f.write(chunk)
+                f.flush()
+            # No sleep: short dwell is the whole point.
+            if i % 200 == 0:
+                print(f"  ... {i}/{n_files}")
     elapsed = time.time() - t0
     time.sleep(3)
     after = scrape()
+    achieved = n_files / elapsed if elapsed > 0 else 0.0
     print(f"[intermittent] after:  {after}")
+    print(f"[intermittent] achieved {achieved:.0f} files/s "
+          f"(target {files_per_sec}/s)")
     return {"scenario": "intermittent", "elapsed_s": elapsed,
+            "files_per_sec_achieved": achieved,
             "before": before, "after": after}
 
 
@@ -281,6 +313,10 @@ def main():
     p.add_argument("--prepare-tar", action="store_true",
                    help="Build benign.tar in the workdir and exit (keeps the "
                         "tar build out of the measured benign window)")
+    p.add_argument("--intermittent-rate", type=float, default=350.0,
+                   help="Paced files/s for the intermittent scenario "
+                        "(0 = unpaced legacy). 350 replicates the 2026-09-25 "
+                        "calibration conditions.")
     args = p.parse_args()
 
     if args.prepare_tar:
@@ -302,7 +338,8 @@ def main():
     if args.scenario in ("attack", "both", "all"):
         results.append(run_attack(args.workdir))
     if args.scenario in ("intermittent", "all"):
-        results.append(run_intermittent(args.workdir))
+        results.append(run_intermittent(args.workdir,
+                                        files_per_sec=args.intermittent_rate))
 
     if not scrape():
         print("[err] daemon /metrics not reachable. Start the daemon first.",
