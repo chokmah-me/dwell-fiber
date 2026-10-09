@@ -1,6 +1,9 @@
 # Project Status
 
-**Last updated:** 2026-09-28 (V3 throttle-only 7/7 hard gates PASS on WSL: attack throttled to 100 files/s vs 350/s unthrottled, peak price 456.2, zero kills, benign tar clean; `/proc` fallback sensor unblocked BPF-blind WSL kernel)
+**Last updated:** 2026-10-08 (v1.8.0: armed V3 throttle test 7/7 hard gates PASS
+on WSL — attack throttled in 10 s at the locked 102.2/204.4 band, zero kills,
+benign tar clean; ambient storm gauge wired into the calibration harness;
+`/proc` fallback sensor unblocked BPF-blind WSL kernel)
 
 ## Working
 
@@ -136,12 +139,19 @@ There is no committed roadmap. Likely follow-ups, in rough priority order:
    - Identify and quiet the ambient enumeration source (~679 opens/s, TBW 0,
      short-lived PIDs, price 162.65 at budget 150) that contaminates
      measurement windows on this host (docker/localstack/containerd candidates).
-3. **ACP bridge (new, 2026-09-25, unvalidated):** `daemon/acp_policy.go` ports
-   the acp-simulation `OptimisticACPDefender` decision logic into V3 as an
-   opt-in `--acp-policy` flag -- per-PID attacker-phase estimation
-   (recon/learning/exploitation) modulating the ADMM update (dampened during
-   the cognitive latency window, escalated on confident exploitation).
-   Unit-tested (`daemon/acp_policy_test.go`); design and honest scope in
-   `docs/acp-bridge.md`. Multipliers uncalibrated; live validation deferred to
-   the WSL re-run in item 2.
-4. Otherwise: stop.
+3. ~~ACP bridge unvalidated~~ **Live-validated 2026-09-25** (benign P_b=0.0,
+   intermittent P_i=681.37 vs 344.20 control; see CHANGELOG) and the
+   recon/learning/exploitation multipliers got live phase-walk evidence
+   2026-09-28 (`test/wsl_phase_workload.py`; workplan item 3). Thresholds
+   **locked 2026-09-28** into `pkg/enforcement/config.go` defaults
+   (102.2/204.4, fail-closed test pinned; workplan item 5), and the armed
+   throttle test **passed 2026-09-28** — 7/7 hard gates with
+   `--v3-enforce` live, kill band provably disarmed (`test/wsl_throttle_test.sh`;
+   workplan item 6). Enforcement remains observation-mode by default.
+4. **Still open: ambient enumeration source** (workplan item 1) — blocks
+   comfortable threshold margin. ~30 s cadence bursts (UFM 200–679/s, TBW 0,
+   odd comms) absent since ~03:11 on 2026-09-28; the storm gauge now labels
+   them live and `v3_measure.sh` excludes storm-labeled windows (`P_*_clean`),
+   so the next burst window can be measured cleanly. Re-run
+   `test/wsl_ambient_hunt.sh` if bursts return.
+5. Otherwise: stop.

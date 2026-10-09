@@ -5,25 +5,32 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 25.10](https://img.shields.io/badge/Ubuntu-25.10-orange.svg)](https://ubuntu.com/)
 [![Coq 8.18](https://img.shields.io/badge/Coq-8.18-blue.svg)](https://coq.inria.fr/)
-[![Version: v1.7.0](https://img.shields.io/badge/Version-v1.7.0-green.svg)](https://github.com/chokmah-me/dwell-fiber/releases/tag/v1.7.0)
+[![Version: v1.8.0](https://img.shields.io/badge/Version-v1.8.0-green.svg)](https://github.com/chokmah-me/dwell-fiber/releases/tag/v1.8.0)
 [![Build: Coq Verified](https://img.shields.io/badge/Build-Coq%20Verified-brightgreen.svg)](https://github.com/chokmah-me/dwell-fiber)
 
 ## Current status
 
-v1.7.0 ships **V3 dual-mode** alongside production V2: rate-based WIP
+v1.8.0 ships **V3 dual-mode** alongside production V2: rate-based WIP
 observation (`--use-v3-wip`) detects the fast-intermittent-encryption pattern
 V2 is blind to; opt-in enforcement (`--v3-enforce`, dry-run by default;
-`--v3-enable-killing` separate) can throttle/kill on that signal. Event
-counters are counted **in-kernel before** the dwell filter. V3 process names
-for tiering come from the BPF `wip_tracker` map (`bpf_get_current_comm` at
-window create), not only `/proc` — required under WSL PID skew. V3 thresholds
-are *starting points* — re-tune on your target before trusting live
-enforcement. New: opt-in **ACP cognitive-phase price policy** (`--acp-policy`)
-modulates the V3 ADMM update by inferred attacker phase (recon/learning/
-exploitation) — see [docs/acp-bridge.md](docs/acp-bridge.md); uncalibrated,
-unit-tested only. Coq proofs are **complete: 76/76 declarations, 0 admitted**
-(Coq 8.18.0), verified fail-closed via `make verify`. See [STATUS.md](STATUS.md)
-and [CHANGELOG.md](CHANGELOG.md).
+`--v3-enable-killing` separate) throttles/kills on that signal. V3 thresholds
+are **calibrated and locked** into daemon defaults (V3ThrottlePrice=102.2,
+V3KillPrice=204.4) from the third calibration pass (`P_b = 0.0`,
+`P_i = 681.37`, all gates pass), with runtime override flags — and the armed
+throttle test passed live on the WSL guest (7/7 gates: attack io.max-throttled
+in 10 s, kill band provably disarmed, benign tar untouched). The opt-in **ACP
+cognitive-phase price policy** (`--acp-policy`) modulates the V3 ADMM update
+by inferred attacker phase (recon/learning/exploitation) — live-validated with
+~2× attack-peak lift vs fixed pricing; see
+[docs/acp-bridge.md](docs/acp-bridge.md). An observe-only **ambient-storm
+distinguisher** (`daemon/ambient.go`) labels metronomic open-storm bursts
+across PIDs and is wired into the calibration harness (`P_*_clean` peaks).
+Event counters are counted **in-kernel before** the dwell filter. V3 process
+names for tiering come from the BPF `wip_tracker` map
+(`bpf_get_current_comm` at window create), not only `/proc`. Coq proofs are
+**complete: 76/76 declarations, 0 admitted** (Coq 8.18.0), verified
+fail-closed via `make verify`. See [STATUS.md](STATUS.md) and
+[CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -72,6 +79,7 @@ sudo ./bin/dwell-fiber-daemon --enable-enforcement --enable-killing
 | **V2.x Architecture** | [V2 Architecture](docs/v2-architecture.md) |
 | **V3.0 Roadmap** | [V3 Roadmap](docs/v3-roadmap.md) |
 | **ACP Bridge** | [ACP Cognitive-Phase Policy](docs/acp-bridge.md) |
+| **Ambient Distinguisher** | [Ambient-vs-Enumeration Design](docs/ambient-distinguisher.md) |
 | **V3 Calibration** | [V3 Threshold Calibration](docs/v3-calibration.md) |
 | **Benchmarks** | [BENCHMARKS.md](BENCHMARKS.md) |
 | **Project status** | [STATUS.md](STATUS.md) |
@@ -93,13 +101,17 @@ pattern: <100ms dwell per file across thousands of files). **V3 WIP** is
 integrated in dual mode (`--use-v3-wip` / `--v3-enforce`); the third
 calibration pass (2026-09-25, WSL) measured feasible separation
 (`P_b = 0.0`, `P_i = 681.37` → throttle 102.2, kill 204.4, all gates pass)
-after the BPF verifier fix and the map-stored `comm` tiering fix — but
-thresholds are not yet locked into daemon defaults pending ambient-source
-identification and margin analysis. The **ACP cognitive-phase policy**
-(opt-in `--acp-policy`) modulates V3 pricing by attacker phase; live
-A/B (2026-09-25) showed ~2× attack-peak lift vs fixed pricing (344.20 →
-681.37) with gates passing either way. Original V3 drafts remain at tags
-`v3.0.0`–`v3.0.2` / `outputs/`. See [docs/v3-roadmap.md](docs/v3-roadmap.md),
+after the BPF verifier fix and the map-stored `comm` tiering fix, and those
+thresholds are **locked into daemon defaults** (2026-09-28) with the armed
+throttle test passed live (7/7 gates, `test/wsl_throttle_test.sh`). Accepted
+caveat: the worst ambient burst seen (~96 price) sits ~6% below the throttle
+band and its source is not yet identified — the ambient-storm gauge now
+labels such bursts live and enforcement stays observation-mode by default.
+The **ACP cognitive-phase policy** (opt-in `--acp-policy`) modulates V3
+pricing by attacker phase; live A/B (2026-09-25) showed ~2× attack-peak lift
+vs fixed pricing (344.20 → 681.37) with gates passing either way. Original V3
+drafts remain at tags `v3.0.0`–`v3.0.2` / `outputs/`. See
+[docs/v3-roadmap.md](docs/v3-roadmap.md),
 [docs/v3-calibration.md](docs/v3-calibration.md), [docs/acp-bridge.md](docs/acp-bridge.md),
 [STATUS.md](STATUS.md).
 
@@ -204,7 +216,7 @@ MIT License - See [LICENSE](LICENSE)
   title={Dwell-Fiber: Formally-Verified Ransomware Defense},
   author={Daniyel Yaacov Bilar},
   year={2026},
-  version={v1.7.0},
+  version={v1.8.0},
   url={https://github.com/chokmah-me/dwell-fiber}
 }
 ```

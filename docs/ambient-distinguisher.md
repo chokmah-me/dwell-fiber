@@ -84,7 +84,13 @@ per-PID state is blind to.
 
 1. Parent-provenance capture at window-create (`real_parent` walk with
    `CORE_READ_PROBE`, same pattern as the verifier fix).
-2. Harness integration: `v3_measure.sh` reads the storm gauge to compute a
-   real ambient ceiling per window.
+2. ~~Harness integration: `v3_measure.sh` reads the storm gauge to compute a
+   real ambient ceiling per window.~~ **Done 2026-09-28:**
+   `test/calibrate_v3.py --from-metrics` records `ambient_storm` and
+   `ambient_bursts_total` per series sample and reports
+   `peak_price_nonambient` / `ambient_storm_seen`; `test/v3_measure.sh`
+   extracts `P_b_clean` / `P_i_clean` (peaks excluding storm-labeled samples,
+   falling back to the plain peak when the daemon predates the gauge) into
+   `results.json`. Verified against a fake metrics endpoint.
 3. Revisit thresholds against labeled live data once the ambient source
    (workplan item 1) is identified.

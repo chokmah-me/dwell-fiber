@@ -1,14 +1,14 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using these metadata."
 title: "Dwell-Fiber: Formally-Verified Ransomware Defense"
-abstract: "eBPF-based ransomware defense using ADMM economic enforcement. Monitors file dwell time, throttles/kills over-budget processes. Formally verified in Coq (29/48 proofs complete). Runs on Ubuntu 25.10 with kernel 5.8+."
+abstract: "eBPF-based ransomware defense using ADMM economic enforcement. Monitors file dwell time, throttles/kills over-budget processes. V3 adds rate-based WIP detection for fast intermittent encryption, with calibrated thresholds (102.2/204.4) live-validated under armed throttling. Formally verified in Coq (76/76 proofs complete, 0 admitted). Runs on Ubuntu 25.10 with kernel 5.8+."
 type: software
 authors:
   - family-names: "Bilar"
     given-names: "Daniyel Yaacov"
     orcid: "https://orcid.org/0000-0002-9040-6914"
-version: "v1.7.0"
-date-released: "2026-07-31"
+version: "v1.8.0"
+date-released: "2026-10-08"
 repository-code: "https://github.com/chokmah-me/dwell-fiber"
 keywords:
   - "ransomware defense"

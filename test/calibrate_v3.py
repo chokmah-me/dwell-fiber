@@ -43,6 +43,8 @@ TIER_CONFIGS = {
 METRICS_URL = "http://localhost:9090/metrics"
 V3_PRICE_METRIC = "dwell_fiber_v3_price"
 V3_PHASE_METRIC = "dwell_fiber_v3_acp_phase"
+V3_AMBIENT_STORM_METRIC = "dwell_fiber_v3_ambient_storm"
+V3_AMBIENT_BURSTS_METRIC = "dwell_fiber_v3_ambient_bursts_total"
 
 
 def leak_price(price: float, leak: float = DEFAULT_LEAK) -> float:
@@ -305,13 +307,17 @@ def from_metrics(
 ) -> Dict[str, Any]:
     """Poll metrics for duration_s; return peak/last price plus the full series.
 
-    The "series" list holds one {"t", "price", "acp_phase"} dict per sample
-    (t = seconds since poll start), so time-to-threshold and the phase
-    trajectory can be analyzed offline. "samples" remains the sample count
-    for backward compatibility.
+    The "series" list holds one {"t", "price", "acp_phase", "ambient_storm",
+    "ambient_bursts_total"} dict per sample (t = seconds since poll start), so
+    time-to-threshold, the phase trajectory, and ambient-storm overlap can be
+    analyzed offline. "samples" remains the sample count for backward
+    compatibility. "peak_price_nonambient" is the peak over samples where the
+    ambient-storm gauge read 0, so calibration can exclude storm-labeled
+    windows (docs/ambient-distinguisher.md, harness integration).
     """
     t0 = time.time()
     peak = 0.0
+    peak_nonambient = 0.0
     last = 0.0
     series = []
     while True:
@@ -324,10 +330,21 @@ def from_metrics(
                 "(is the daemon running with --use-v3-wip?)"
             )
         phase = _parse_metric(text, V3_PHASE_METRIC)
+        storm = _parse_metric(text, V3_AMBIENT_STORM_METRIC)
+        storm = 1.0 if storm else 0.0  # absent gauge (old daemon) reads as no storm
+        bursts = _parse_metric(text, V3_AMBIENT_BURSTS_METRIC)
         if last > peak:
             peak = last
+        if storm == 0.0 and last > peak_nonambient:
+            peak_nonambient = last
         series.append(
-            {"t": round(now - t0, 3), "price": last, "acp_phase": phase}
+            {
+                "t": round(now - t0, 3),
+                "price": last,
+                "acp_phase": phase,
+                "ambient_storm": storm,
+                "ambient_bursts_total": bursts,
+            }
         )
         elapsed = now - t0
         if elapsed >= duration_s:
@@ -339,6 +356,9 @@ def from_metrics(
         "duration_s": duration_s,
         "samples": len(series),
         "peak_price": peak,
+        "peak_price_nonambient": peak_nonambient,
+        "ambient_storm_seen": any(s["ambient_storm"] == 1.0 for s in series),
+        "ambient_bursts_total": series[-1]["ambient_bursts_total"],
         "final_price": last,
         "series": series,
     }

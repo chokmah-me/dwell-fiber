@@ -110,6 +110,30 @@ extract_peak() {
     printf '  peak_price=%s\n' "$peak"
 }
 
+# Peak over poller samples where the ambient-storm gauge read 0. Falls back to
+# the plain peak when the poller JSON has no series/ambient_storm (older
+# daemon or parse failure) so calibration never silently drops data.
+extract_peak_nonambient() {
+    local poller_json="$1" peak_file="$2"
+    local peak
+    set +e
+    peak=$(python3 -c \
+        "import json,sys
+t=open(sys.argv[1]).read()
+d=json.loads(t[t.find('{'):])
+s=d.get('series') or []
+vals=[x.get('price',0) for x in s if x.get('ambient_storm',0)==0]
+print(max(vals) if vals else d.get('peak_price',0))" \
+        "$poller_json" 2>/dev/null)
+    set -e
+    if [ -z "$peak" ]; then
+        peak=$(cat "${peak_file/-nonambient/}" 2>/dev/null || printf '0')
+        printf '  WARN: nonambient peak parse failed; using plain peak\n' >&2
+    fi
+    printf '%s\n' "$peak" > "$peak_file"
+    printf '  peak_price_nonambient=%s\n' "$peak"
+}
+
 # ---- idle ambient window (no bench) ----
 # The true ambient ceiling: peak V3 price while the machine is otherwise
 # idle. The old approach (max price= over the whole daemon log) measured the
@@ -186,6 +210,8 @@ check_daemon
 P_B=""
 P_I=""
 AMBIENT=""
+P_B_CLEAN=""
+P_I_CLEAN=""
 
 # 0 — ambient idle window (true ambient ceiling; nothing running)
 AMBIENT_DURATION="${AMBIENT_DURATION:-60}"
@@ -198,17 +224,23 @@ drain_floor benign
 measure_window benign "$POLLER_BENIGN_DURATION"
 P_B=$(cat "$RESULTS_DIR/peak-benign.txt")
 printf 'P_b (benign window peak) = %s\n' "$P_B"
+extract_peak_nonambient "$RESULTS_DIR/poller-benign.json" \
+    "$RESULTS_DIR/peak-benign-nonambient.txt"
+P_B_CLEAN=$(cat "$RESULTS_DIR/peak-benign-nonambient.txt")
 
 # 2 — intermittent window
 drain_floor intermittent
 measure_window intermittent "$POLLER_INTERMITTENT_DURATION"
 P_I=$(cat "$RESULTS_DIR/peak-intermittent.txt")
 printf 'P_i (intermittent window peak) = %s\n' "$P_I"
+extract_peak_nonambient "$RESULTS_DIR/poller-intermittent.json" \
+    "$RESULTS_DIR/peak-intermittent-nonambient.txt"
+P_I_CLEAN=$(cat "$RESULTS_DIR/peak-intermittent-nonambient.txt")
 
 # 3 — write results (ambient ceiling comes from the idle window above,
 # not from the daemon log: the old log-grep measured the bench itself)
-printf '{\n  "P_b": %s,\n  "P_i": %s,\n  "ambient_ceiling_idle": %s,\n  "date": "%s",\n  "comment": "ambient_ceiling_idle = peak V3 price during a 60s idle window (no bench). P_b_eff = max(P_b, ambient_ceiling_idle). Paced intermittent bench (--intermittent-rate, default 350/s); achieved rate printed by bench.py."\n}\n' \
-    "$P_B" "$P_I" "$AMBIENT" "$(date -Iseconds)" \
+printf '{\n  "P_b": %s,\n  "P_i": %s,\n  "P_b_clean": %s,\n  "P_i_clean": %s,\n  "ambient_ceiling_idle": %s,\n  "date": "%s",\n  "comment": "ambient_ceiling_idle = peak V3 price during a 60s idle window (no bench). P_b_eff = max(P_b, ambient_ceiling_idle). P_*_clean = peak over poller samples where dwell_fiber_v3_ambient_storm == 0 (ambient-labeled windows excluded); equals P_* when no storm was seen. Paced intermittent bench (--intermittent-rate, default 350/s); achieved rate printed by bench.py."\n}\n' \
+    "$P_B" "$P_I" "$P_B_CLEAN" "$P_I_CLEAN" "$AMBIENT" "$(date -Iseconds)" \
     > "$RESULTS_DIR/results.json"
 
 printf '\n=== results ===\n'

@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [1.8.0] - 2026-10-08
 
 ### Added
 
@@ -70,6 +70,24 @@ All notable changes to this project are documented in this file.
   with fixed pricing too (policy buys headroom, not feasibility). One-command
   runs: `test/wsl_acp_validate.sh` (policy on) /
   `test/wsl_acp_validate.sh --control` (policy off).
+
+- **Armed V3 throttle test passed** (2026-09-28, live on the WSL guest,
+  `test/wsl_throttle_test.sh`): daemon armed with `--v3-enforce`
+  (throttle-only, killing disarmed) — 7/7 hard gates PASS. Intermittent
+  attack peak price 456.23 crossed both bands; io.max `wbps=1048576`
+  kernel-verified on `dwell-fiber-v3.slice`, attack PIDs observed in the
+  slice's `cgroup.procs`, time-to-throttle 10 s, `killed_count` unchanged
+  with only `[DRY-RUN] Would kill` lines, benign tar exit 0 with
+  `throttled_count` unchanged and `peak_price=0`. First live proof that
+  the locked 102.2/204.4 band enforces without touching benign I/O.
+
+- **Harness integration for the ambient storm gauge** (2026-09-28,
+  `test/calibrate_v3.py` + `test/v3_measure.sh`). The poller now records
+  `ambient_storm` / `ambient_bursts_total` per series sample and reports
+  `peak_price_nonambient` / `ambient_storm_seen`; `v3_measure.sh` writes
+  `P_b_clean` / `P_i_clean` (peaks excluding storm-labeled samples, falling
+  back to the plain peak against pre-detector daemons) into `results.json`.
+  Verified against a fake metrics endpoint.
 
 ### Formal verification
 
